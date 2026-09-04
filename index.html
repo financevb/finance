@@ -670,7 +670,7 @@ function render(){
   if(current==='fuel')act=`<button class="btn btn-primary" onclick="openFuelForm()">${I.car}<span>유류비 신청</span></button>`;
   if(current==='expense')act=`<button class="btn btn-primary" onclick="openExpenseForm()">${I.plus}<span>지출결의 등록</span></button>`;
   if(current==='cardreport')act=`<button class="btn btn-line btn-sm" onclick="openCardBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openCardForm()">${I.plus}<span>기명 법카 신고</span></button>`;
-  if(current==='invoice')act=`<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
+  if(current==='invoice')act=`${canDeposit()?`<button class="btn btn-line" onclick="openDepositImport()">📥<span>입금확인 가져오기</span></button>`:''}<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
   if(current==='vendors')act=`<button class="btn btn-line" onclick="exportVendors()">${I.download}<span>거래처 엑셀</span></button>`;
   if(current==='coupon')act=`${canApprove()?`<button class="btn btn-line btn-sm" onclick="openCouponCodeForm()">${I.plus}<span>코드 추가</span></button>`:''}<button class="btn btn-primary" onclick="openCouponForm()">${I.plus}<span>새 쿠폰 발급</span></button>`;
   document.getElementById('pgActions').innerHTML=act;
@@ -1490,6 +1490,64 @@ function saveDepositForm(id){
   saveDeposits();closeModal();render();toast(d?'입금확인 저장했어요. ('+d+')':'메모를 저장했어요.','ok');
 }
 function clearDeposit(id){delete DEPOSITS[id];saveDeposits();closeModal();render();toast('입금확인·메모를 삭제했어요.');}
+/* 입금확인 엑셀 가져오기 — 세금계산서 시트에서 입금일·실제입금액·내용을 읽어 발행 건과 매칭 */
+function openDepositImport(){
+  if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}
+  modal('📥 입금확인 엑셀 가져오기','',`<div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">기존 세금계산서 시트 엑셀에서 입금확인 정보를 불러와요.</b><br>시트 이름에 "세금계산서"가 들어간 탭의 <b>입금확인(입금일) · 실제입금액 · 내용</b>을 읽고,<br>사이트의 발행 건과 <b>사업자번호 + 작성일 + 합계금액</b>으로 자동 매칭해요.<br>입금일이 적힌 건은 그 날짜가 그대로 저장돼요.</div>
+    <div class="form-row" style="margin-top:12px"><label>엑셀 파일 선택</label><input class="input" type="file" id="depimp_file" accept=".xlsx,.xls" style="padding:8px"></div>
+    <div id="depimp_result" class="t-sub" style="margin-top:8px;line-height:1.6"></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">닫기</button><button class="btn btn-primary" onclick="runDepositImport()">가져오기</button>`);
+}
+function _impNum(v){if(typeof v==='number')return v;const n=parseFloat(String(v).replace(/[,\s원]/g,''));return isNaN(n)?0:n;}
+function _impDate(v,defYear){
+  if(v instanceof Date&&!isNaN(v)){const d=new Date(v.getTime()+9*3600*1000);return d.toISOString().slice(0,10);}
+  if(typeof v==='number'&&v>40000&&v<60000){const d=new Date(Math.round((v-25569)*86400*1000)+9*3600*1000);return d.toISOString().slice(0,10);}
+  if(typeof v==='string'){const s=v.trim();let m=s.match(/(\d{4})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);if(m)return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');m=s.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);if(m&&defYear)return defYear+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');}
+  return '';
+}
+function runDepositImport(){
+  const f=document.getElementById('depimp_file');
+  if(!f||!f.files||!f.files[0]){toast('엑셀 파일을 선택해 주세요.','err');return;}
+  const file=f.files[0];const out=document.getElementById('depimp_result');
+  out.textContent='읽는 중…';
+  loadXLSX().then(()=>file.arrayBuffer()).then(buf=>{
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const recs=[];
+    wb.SheetNames.filter(n=>/세금계산서/.test(n)).forEach(n=>{
+      const ym=(n.match(/(\d{2})/)||[])[1];const defYear=ym?('20'+ym):'';
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:'',blankrows:false});
+      let hi=-1;for(let i=0;i<Math.min(rows.length,6);i++){if(rows[i].some(c=>String(c).includes('입금확인'))){hi=i;break;}}
+      if(hi<0)return;
+      const H=rows[hi].map(c=>String(c).replace(/\s/g,''));
+      const col=t=>H.findIndex(h=>h.includes(t));
+      const cBiz=col('사업자등록번호'),cW=col('계산서작성일'),cTot=(col('세금계산서합계')>=0?col('세금계산서합계'):col('합계')),cAmt=col('실제입금액'),cNote=col('내용'),cDep=col('입금확인');
+      if(cBiz<0||cTot<0||cDep<0)return;
+      rows.slice(hi+1).forEach(r=>{
+        if(String(r[1]).trim()==='예시')return;
+        const biz=digits(r[cBiz]);const total=_impNum(r[cTot]);
+        if(!biz||!total)return;
+        const dep=_impDate(r[cDep],defYear);const amt=cAmt>=0?_impNum(r[cAmt]):0;const note=String(cNote>=0?(r[cNote]||''):'').trim();
+        if(!dep&&!amt&&!note)return;
+        recs.push({biz,w:cW>=0?_impDate(r[cW],defYear):'',total,dep,amt,note});
+      });
+    });
+    if(!recs.length){out.textContent='엑셀에서 입금확인 정보를 찾지 못했어요. (시트 이름에 "세금계산서", 열 제목에 "입금확인"이 있어야 해요)';return;}
+    const used=new Set();let hit=0;
+    const idx={};
+    DB.invoice.forEach(v=>{const b=digits(v.bizNo),t=Number(v.total)||0;const k1=b+'|'+(v.writeDate||'')+'|'+t;(idx[k1]=idx[k1]||[]).push(v);const k2=b+'||'+t;(idx[k2]=idx[k2]||[]).push(v);});
+    recs.forEach(rc=>{
+      const cands=(idx[rc.biz+'|'+rc.w+'|'+rc.total]||[]).concat(idx[rc.biz+'||'+rc.total]||[]);
+      const v=cands.find(x=>!used.has(x.id));
+      if(!v)return;
+      used.add(v.id);
+      DEPOSITS[v.id]={d:rc.dep||'',amt:rc.amt||0,note:rc.note||''};
+      hit++;
+    });
+    saveDeposits();render();
+    out.innerHTML=`✅ 엑셀에서 ${recs.length}건을 읽어 <b>${hit}건</b>을 사이트 발행 건과 매칭해 저장했어요.`+(recs.length-hit?`<br>매칭 안 된 ${recs.length-hit}건은 사이트에 등록되지 않은 건일 가능성이 커요.`:'');
+    toast(hit+'건 입금확인 정보를 가져왔어요.','ok');
+  }).catch(e=>{out.textContent='파일을 읽지 못했어요: '+((e&&e.message)||e);});
+}
 function batchDeposit(){if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!depositOf(r.id));if(!ss.length){toast('선택한 항목이 이미 모두 입금확인 상태예요.','err');return;}const d=today();ss.forEach(r=>{const c=depData(r.id);DEPOSITS[r.id]={d,amt:c.amt||0,note:c.note||''};});saveDeposits();_sel=new Set();render();toast(ss.length+'건 입금확인 표시. ('+d+')','ok');}
 function batchInvoice(status){const ss=DB.invoice.filter(r=>_sel.has(r.id)&&r.status==='requested');if(!ss.length){toast('선택한 항목 중 발행대기 건이 없어요.','err');return;}if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_invoice',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리.','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='issued';});_sel=new Set();render();toast(ss.length+'건 처리.','ok');}}
 function exportInvoiceRows(ss,fname){loadXLSX().then(function(){const head=['요청일','요청자','소속팀','사업자등록번호(공급받는자)','상호','이메일(공급받는자)','계산서작성일','품목명','유형','공급가액','부가세액','세금계산서합계','실제입금액','내용','계산서발급일','상태','입금확인'];const data=ss.map(r=>{const dd=depData(r.id);return [r.applied,r.requester,normalizeTeam(r.team)||'',r.bizNo,r.company,r.email,r.writeDate,r.itemName,r.saleType,r.supply,r.tax,r.total,dd.amt||'',dd.note||'',r.issuedAt||'',(ISTATUS[r.status]||['?'])[0],dd.d||''];});const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:11},{wch:8},{wch:9},{wch:16},{wch:20},{wch:24},{wch:11},{wch:26},{wch:6},{wch:12},{wch:11},{wch:13},{wch:12},{wch:26},{wch:11},{wch:9},{wch:11}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'세금계산서');XLSX.writeFile(wb,fname);toast(ss.length+'건 엑셀 다운로드.','ok');}).catch(()=>toast('엑셀 로드 실패','err'));}
