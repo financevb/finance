@@ -128,6 +128,11 @@ th.rz{position:relative;width:var(--cw,300px);min-width:120px}.rzh{position:abso
 .depbtn{display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 10px;border-radius:999px;border:1.4px dashed var(--gray-300);background:#fff;font-size:12px;font-weight:600;color:var(--gray-600);cursor:pointer;white-space:nowrap}
 .depbtn:hover{border-color:var(--billy-blue);color:var(--billy-blue);background:var(--billy-blue-50)}
 .depbtn.depon{border-style:solid;border-color:var(--billy-blue-100);background:var(--billy-blue-50);color:var(--billy-blue)}
+.invtbl{table-layout:fixed}
+.invtbl td{overflow:hidden;text-overflow:ellipsis}
+.invtbl thead th{position:relative}
+.colrz{position:absolute;top:15%;right:-4px;width:9px;height:70%;cursor:col-resize;border-right:2px solid var(--gray-200);z-index:3}
+.colrz:hover,.colrz.drag{border-right-color:var(--billy-blue)}
 button.badge{border:none;cursor:pointer;font-family:inherit}
 button.badge:hover{filter:brightness(.96)}
 .badge .caret{font-size:9px;opacity:.6;margin-left:1px}
@@ -608,12 +613,12 @@ const PAGES={
   banklink:{t:'이체 여부연동',d:'법인통장 출금내역과 이체 요청을 자동으로 대사(매칭)하는 기능이에요. (추후 개발 예정)',render:renderBankLink},
 };
 const NAV=[
-  ['dashboard','대시보드','m_dash','일반'],
+  ['invoice','세금계산서 발행','m_doc','일반'],
   ['payout','이체 요청','m_money','일반'],
   ['fuel','유류비 신청','car','일반'],
   ['expense','지출결의','m_expense','일반','결의'],
   ['cardreport','기명 법카 신고','m_card','일반','법카'],
-  ['invoice','세금계산서 발행','m_doc','일반'],
+  ['dashboard','대시보드','m_dash','일반'],
   ['coupon','빌리쇼핑 쿠폰','m_coupon','일반'],
   ['vendors','거래처 관리','m_vendor','일반'],
   ['proof','증빙 미수취','m_proof','관리자'],
@@ -1361,9 +1366,9 @@ function renderInvoice(){
   h+=invoiceSumBar(list);
   if(mineApprove&&_sel.size)h+=`<div class="batchbar"><span class="sel">${_sel.size}건 선택</span><button class="btn btn-sm btn-line" onclick="batchInvoice('issued')">${I.check}<span>발행완료 표시</span></button><button class="btn btn-sm btn-line" onclick="batchDeposit()">${I.check}<span>입금확인 표시</span></button><button class="btn btn-sm btn-primary" onclick="exportInvoice()">${I.download}<span>홈택스 발행 엑셀</span></button><button class="btn btn-sm btn-secondary" onclick="_sel=new Set();render()">해제</button></div>`;
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 발행 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
-  h+='<div class="card"><div class="table-wrap"><table class="cardtbl" style="--cw:'+colwVar('invoice')+'"><thead><tr>';
+  h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl"><thead><tr>';
   if(mineApprove)h+=`<th style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('invoice')"></th>`;
-  h+=`<th class="sortable" onclick="setSort('invoice','date')">요청일${sortIcon('invoice','date')}</th><th class="mhide">요청자</th><th class="sortable" onclick="setSort('invoice','name')">상호${sortIcon('invoice','name')}</th><th class="mhide">이메일</th><th class="sortable mhide" onclick="setSort('invoice','writeDate')">작성일${sortIcon('invoice','writeDate')}</th><th class="rz">품목명<span class="rzh" data-rz="invoice" onclick="event.stopPropagation()"></span></th><th class="mhide">유형</th><th class="mhide" style="text-align:right">공급가액</th><th class="mhide" style="text-align:right">부가세액</th><th class="sortable" style="text-align:right" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide" style="text-align:right">실제입금액</th><th class="mhide">내용</th><th class="mhide">발급일</th><th>상태</th><th>입금확인</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="sortable" onclick="setSort('invoice','date')">요청일${sortIcon('invoice','date')}</th><th class="mhide">요청자</th><th class="sortable" onclick="setSort('invoice','name')">상호${sortIcon('invoice','name')}</th><th class="mhide">이메일</th><th class="sortable mhide" onclick="setSort('invoice','writeDate')">작성일${sortIcon('invoice','writeDate')}</th><th>품목명</th><th class="mhide">유형</th><th class="mhide" style="text-align:right">공급가액</th><th class="mhide" style="text-align:right">부가세액</th><th class="sortable" style="text-align:right" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide" style="text-align:right">실제입금액</th><th class="mhide">내용</th><th class="mhide">발급일</th><th>상태</th><th>입금확인</th><th></th></tr></thead><tbody>`;
   list.forEach(r=>{const st=ISTATUS[r.status];
     h+=`<tr class="rowclk" onclick="viewInvoice('${r.id}')">`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
@@ -1372,7 +1377,7 @@ function renderInvoice(){
     h+=`<td><div class="t-name">${escH(r.company)}</div><div class="t-sub num">${escH(r.bizNo)}</div></td>`;
     h+=`<td class="mhide" style="font-size:12px;word-break:break-all">${escH(r.email||'-')}</td>`;
     h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.writeDate||'-')}</td>`;
-    h+=`<td class="rzc"><div class="ellip">${escH(r.itemName)}</div></td>`;
+    h+=`<td><div class="ellip">${escH(r.itemName)}</div></td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.saleType||'매출')}</span></td>`;
     h+=`<td class="mhide num" style="text-align:right">${won(r.supply)}</td>`;
     h+=`<td class="mhide num" style="text-align:right">${won(r.tax)}</td>`;
@@ -1387,6 +1392,38 @@ function renderInvoice(){
   });
   h+='</tbody></table></div></div>';
   c.innerHTML=h;
+  initInvResize();
+}
+/* 세금계산서 표 — 모든 열 드래그로 너비 조절, localStorage 저장 (열 제목 기준) */
+const INV_COLW_KEY='fin_colw_invoice_v1';
+let INV_COLW={};try{INV_COLW=JSON.parse(localStorage.getItem(INV_COLW_KEY)||'{}')||{};}catch(e){INV_COLW={};}
+const INV_DEF_W={'요청일':86,'요청자':74,'상호':170,'이메일':160,'작성일':86,'품목명':210,'유형':56,'공급가액':96,'부가세액':90,'합계':104,'실제입금액':98,'내용':140,'발급일':86,'상태':94,'입금확인':110};
+function initInvResize(){
+  const tbl=document.querySelector('#content table.invtbl');if(!tbl)return;
+  const ths=[...tbl.querySelectorAll('thead th')];
+  const cg=document.createElement('colgroup');
+  ths.forEach((th,i)=>{
+    const label=th.textContent.replace(/[▲▼]/g,'').trim();
+    const col=document.createElement('col');
+    const w=INV_COLW[label]||INV_DEF_W[label];
+    if(w)col.style.width=w+'px';
+    else if(!label)col.style.width=(i===0&&canApprove())?'36px':'66px';
+    cg.appendChild(col);
+    if(label&&INV_DEF_W[label]){
+      const hd=document.createElement('span');hd.className='colrz';th.appendChild(hd);
+      hd.addEventListener('click',e=>e.stopPropagation());
+      hd.addEventListener('mousedown',e=>{
+        e.preventDefault();e.stopPropagation();hd.classList.add('drag');
+        const startX=e.clientX,startW=col.getBoundingClientRect().width;
+        const mv=ev=>{col.style.width=Math.max(42,startW+ev.clientX-startX)+'px';};
+        const up=ev=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);hd.classList.remove('drag');
+          INV_COLW[label]=Math.max(42,Math.round(startW+ev.clientX-startX));
+          try{localStorage.setItem(INV_COLW_KEY,JSON.stringify(INV_COLW));}catch(e2){}};
+        document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
+      });
+    }
+  });
+  tbl.insertBefore(cg,tbl.firstChild);
 }
 function openInvoiceForm(seed){
   seed=seed||{};const types=['매출','매입','영세','비과세'].map(x=>`<option ${seed.saleType===x?'selected':''}>${x}</option>`).join('');
