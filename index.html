@@ -1354,16 +1354,22 @@ function renderInvoice(){
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 발행 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl" style="--cw:'+colwVar('invoice')+'"><thead><tr>';
   if(mineApprove)h+=`<th style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('invoice')"></th>`;
-  h+=`<th class="rz sortable" onclick="setSort('invoice','name')">공급받는자${sortIcon('invoice','name')}<span class="rzh" data-rz="invoice" onclick="event.stopPropagation()"></span></th><th class="mhide">구분</th><th>품목/작성일</th><th class="sortable" style="text-align:right" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide">기한</th><th>상태</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="sortable" onclick="setSort('invoice','date')">요청일${sortIcon('invoice','date')}</th><th class="mhide">요청자</th><th class="sortable" onclick="setSort('invoice','name')">상호${sortIcon('invoice','name')}</th><th class="mhide">이메일</th><th class="sortable mhide" onclick="setSort('invoice','writeDate')">작성일${sortIcon('invoice','writeDate')}</th><th class="rz">품목명<span class="rzh" data-rz="invoice" onclick="event.stopPropagation()"></span></th><th class="mhide">유형</th><th class="mhide" style="text-align:right">공급가액</th><th class="mhide" style="text-align:right">부가세액</th><th class="sortable" style="text-align:right" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide">발급일</th><th>상태</th><th></th></tr></thead><tbody>`;
   list.forEach(r=>{const st=ISTATUS[r.status];
     h+=`<tr class="rowclk" onclick="viewInvoice('${r.id}')">`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
-    h+=`<td class="rzc"><div class="t-name">${escH(r.company)}</div><div class="t-sub num">${escH(r.bizNo)}</div></td>`;
+    h+=`<td class="t-sub num" style="white-space:nowrap">${escH(r.applied||'-')}</td>`;
+    h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}<div class="t-sub">${escH(normalizeTeam(r.team)||'')}</div></td>`;
+    h+=`<td><div class="t-name">${escH(r.company)}</div><div class="t-sub num">${escH(r.bizNo)}</div></td>`;
+    h+=`<td class="mhide" style="font-size:12px;word-break:break-all">${escH(r.email||'-')}</td>`;
+    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.writeDate||'-')}</td>`;
+    h+=`<td class="rzc"><div class="ellip">${escH(r.itemName)}</div></td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.saleType||'매출')}</span></td>`;
-    h+=`<td><div class="ellip">${escH(r.itemName)}</div><div class="t-sub num">${escH(r.writeDate)}</div></td>`;
-    h+=`<td style="text-align:right"><span class="amt">${won(r.total)}</span><div class="t-sub num">VAT ${won(r.tax)}</div></td>`;
-    h+=`<td class="mhide">${deadlineBadge(r.writeDate)||'<span class="t-sub">–</span>'}</td>`;
-    h+=`<td><span class="badge ${st[1]}">${st[0]}</span></td>`;
+    h+=`<td class="mhide num" style="text-align:right">${won(r.supply)}</td>`;
+    h+=`<td class="mhide num" style="text-align:right">${won(r.tax)}</td>`;
+    h+=`<td style="text-align:right"><span class="amt">${won(r.total)}</span></td>`;
+    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.issuedAt||'-')}</td>`;
+    h+=`<td><span class="badge ${st[1]}">${st[0]}</span>${r.status==='requested'?('<div style="margin-top:3px">'+(deadlineBadge(r.writeDate)||'')+'</div>'):''}</td>`;
     h+=`<td><div class="rowact"><button class="iconbtn" title="홈택스 발행 엑셀" onclick="event.stopPropagation();exportInvoiceOne('${r.id}')">${I.download}</button><button class="iconbtn" title="복제" onclick="event.stopPropagation();cloneInvoice('${r.id}')">${I.copy}</button></div></td></tr>`;
   });
   h+='</tbody></table></div></div>';
@@ -1403,7 +1409,7 @@ function viewInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;cons
 }
 function decideInvoice(id,status){sv('fin_decide_invoice',{p_id:id,p_status:status,p_reason:''},()=>{const r=DB.invoice.find(x=>x.id===id);if(r){r.status=status;if(status==='issued')r.issuedAt=today();}}).then(()=>{closeModal();render();toast(status==='issued'?'발행완료로 표시했어요.':'반려했어요.',status==='rejected'?'err':'ok');});}
 function batchInvoice(status){const ss=DB.invoice.filter(r=>_sel.has(r.id)&&r.status==='requested');if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_invoice',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리.','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='issued';});_sel=new Set();render();toast(ss.length+'건 처리.','ok');}}
-function exportInvoiceRows(ss,fname){loadXLSX().then(function(){const head=['작성일자','공급받는자 사업자등록번호','상호','대표자','이메일','품목명','공급가액','세액','합계금액','구분'];const data=ss.map(r=>[r.writeDate,r.bizNo,r.company,r.ceo,r.email,r.itemName,r.supply,r.tax,r.total,r.saleType]);const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:11},{wch:16},{wch:18},{wch:9},{wch:22},{wch:22},{wch:12},{wch:11},{wch:12},{wch:7}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'세금계산서');XLSX.writeFile(wb,fname);toast(ss.length+'건 엑셀 다운로드.','ok');}).catch(()=>toast('엑셀 로드 실패','err'));}
+function exportInvoiceRows(ss,fname){loadXLSX().then(function(){const head=['요청일','요청자','소속팀','사업자등록번호(공급받는자)','상호','이메일(공급받는자)','계산서작성일','품목명','유형','공급가액','부가세액','세금계산서합계','계산서발급일','상태'];const data=ss.map(r=>[r.applied,r.requester,normalizeTeam(r.team)||'',r.bizNo,r.company,r.email,r.writeDate,r.itemName,r.saleType,r.supply,r.tax,r.total,r.issuedAt||'',(ISTATUS[r.status]||['?'])[0]]);const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:11},{wch:8},{wch:9},{wch:16},{wch:20},{wch:24},{wch:11},{wch:26},{wch:6},{wch:12},{wch:11},{wch:13},{wch:11},{wch:9}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'세금계산서');XLSX.writeFile(wb,fname);toast(ss.length+'건 엑셀 다운로드.','ok');}).catch(()=>toast('엑셀 로드 실패','err'));}
 function exportInvoice(){const ss=DB.invoice.filter(r=>_sel.has(r.id));if(!ss.length){toast('항목을 선택하세요.','err');return;}exportInvoiceRows(ss,'세금계산서_선택_'+today()+'.xlsx');}
 function exportInvoiceList(){const ss=applySort(visible(DB.invoice,'invoice'),'invoice');if(!ss.length){toast('내보낼 항목이 없어요.','err');return;}exportInvoiceRows(ss,'세금계산서발행_'+today()+'.xlsx');}
 function _fn(s){return String(s||'').replace(/[\\/:*?"<>|]/g,'').slice(0,20);}
