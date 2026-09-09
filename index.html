@@ -666,11 +666,11 @@ function render(){
   const p=PAGES[current];
   document.getElementById('pgTitle').textContent=p.t;document.getElementById('pgDesc').textContent=p.d;
   let act='';
-  if(current==='payout')act=`<button class="btn btn-line btn-sm" onclick="openTemplates()">🔁 정기</button><button class="btn btn-line btn-sm" onclick="openWHForm()">3.3% 지급</button><button class="btn btn-line btn-sm" onclick="openBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openPayoutForm()">${I.plus}<span>새 이체 요청</span></button>`;
+  if(current==='payout')act=`${canDeposit()?`<button class="btn btn-line btn-sm" onclick="openSheetSync()">🔄 시트 동기화</button>`:''}<button class="btn btn-line btn-sm" onclick="openTemplates()">🔁 정기</button><button class="btn btn-line btn-sm" onclick="openWHForm()">3.3% 지급</button><button class="btn btn-line btn-sm" onclick="openBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openPayoutForm()">${I.plus}<span>새 이체 요청</span></button>`;
   if(current==='fuel')act=`<button class="btn btn-primary" onclick="openFuelForm()">${I.car}<span>유류비 신청</span></button>`;
   if(current==='expense')act=`<button class="btn btn-primary" onclick="openExpenseForm()">${I.plus}<span>지출결의 등록</span></button>`;
   if(current==='cardreport')act=`<button class="btn btn-line btn-sm" onclick="openCardBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openCardForm()">${I.plus}<span>기명 법카 신고</span></button>`;
-  if(current==='invoice')act=`${canDeposit()?`<button class="btn btn-line" onclick="openDepositImport()">📥<span>입금확인 가져오기</span></button>`:''}<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
+  if(current==='invoice')act=`${canDeposit()?`<button class="btn btn-line btn-sm" onclick="openSheetSync()">🔄 시트 동기화</button><button class="btn btn-line" onclick="openDepositImport()">📥<span>입금확인 가져오기</span></button>`:''}<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
   if(current==='vendors')act=`<button class="btn btn-line" onclick="exportVendors()">${I.download}<span>거래처 엑셀</span></button>`;
   if(current==='coupon')act=`${canApprove()?`<button class="btn btn-line btn-sm" onclick="openCouponCodeForm()">${I.plus}<span>코드 추가</span></button>`:''}<button class="btn btn-primary" onclick="openCouponForm()">${I.plus}<span>새 쿠폰 발급</span></button>`;
   document.getElementById('pgActions').innerHTML=act;
@@ -1497,6 +1497,96 @@ function openDepositImport(){
     <div class="form-row" style="margin-top:12px"><label>엑셀 파일 선택</label><input class="input" type="file" id="depimp_file" accept=".xlsx,.xls" style="padding:8px"></div>
     <div id="depimp_result" class="t-sub" style="margin-top:8px;line-height:1.6"></div>`,
     `<button class="btn btn-secondary" onclick="closeModal()">닫기</button><button class="btn btn-primary" onclick="runDepositImport()">가져오기</button>`);
+}
+/* 시트 동기화 — 구글시트(엑셀 다운로드본)의 최근 요청 건 중 사이트에 없는 것만 등록 */
+function openSheetSync(){
+  if(!canDeposit()){toast('시트 동기화는 정채영님만 실행할 수 있어요.','err');return;}
+  modal('🔄 시트 동기화','',`<div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">구글시트에서 다운로드한 엑셀의 최근 요청 건을 사이트에 등록해요.</b><br>이체요청·세금계산서 시트를 모두 읽어 <b>사이트에 없는 건만</b> 새로 등록하고,<br>이체완료일·계산서발급일이 있는 건은 지급완료/발행완료로 표시해요.<br><span style="color:var(--sys-orange)">⚠ 등록일(요청일)은 오늘 날짜로 기록돼요.</span></div>
+    <div class="f2" style="margin-top:12px"><div class="form-row"><label>엑셀 파일 <span class="req">*</span></label><input class="input" type="file" id="sync_file" accept=".xlsx,.xls" style="padding:8px"></div>
+    <div class="form-row"><label>이 날짜 이후 요청분만<span class="hint">과거 건 대량 등록 방지</span></label><input class="input" type="date" id="sync_from" value="${addDays(-30)}"></div></div>
+    <div id="sync_result" class="t-sub" style="margin-top:8px;line-height:1.7"></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">닫기</button><button class="btn btn-primary" id="sync_go" onclick="runSheetSync()">동기화 실행</button>`);
+}
+function _syncCat(p){p=String(p||'');if(/임대료|월세|관리비|임차/.test(p))return '임대료';if(/환불|반품|취소/.test(p))return '환불';if(/광고|마케팅|프로모션|프모|인플루언서|체험단|협찬|라이브/.test(p))return '광고·마케팅비';if(/발주|박스|구매|매입|자재|포장|인쇄|제작|사입|물류|택배|배송/.test(p))return '물품대금';if(/수수료|용역|외주|촬영|디자인|개발|번역|컨설팅|자문|법무|회계|세무|특허/.test(p))return '외주·용역비';if(/구독|멤버십|이용료|라이선스/.test(p))return '구독료';return '기타';}
+async function runSheetSync(){
+  const DRY=!IS_SUPA; /* 데모(로컬)에선 판독만 하고 실제 등록은 안 함 */
+  const f=document.getElementById('sync_file');const from=val('sync_from')||addDays(-30);
+  if(!f||!f.files||!f.files[0]){toast('엑셀 파일을 선택해 주세요.','err');return;}
+  const out=document.getElementById('sync_result');const go=document.getElementById('sync_go');if(go)go.disabled=true;
+  const log=m=>{if(out)out.innerHTML=m;};
+  try{
+    log('파일 읽는 중…');
+    await loadXLSX();
+    const wb=XLSX.read(await f.files[0].arrayBuffer(),{type:'array',cellDates:true});
+    const pays=[];
+    wb.SheetNames.filter(n=>/이체요청/.test(n)).forEach(n=>{
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:'',blankrows:false});
+      let hi=-1;for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i].some(c=>String(c).includes('요청일자'))){hi=i;break;}}
+      if(hi<0)return;
+      const H=rows[hi].map(c=>String(c).replace(/\s/g,''));const col=t=>H.findIndex(h=>h.includes(t));
+      const c={d:col('요청일자'),req:col('요청자'),team:col('소속'),why:col('이체사유'),bank:col('은행명'),acc:col('계좌번호'),amt:col('금액'),unit:col('단위'),payee:col('예금주'),tdate:col('세금계산서작성일'),tflag:col('세금계산서유무'),done:col('이체완료일'),memo:col('비고')};
+      if(c.d<0||c.amt<0||c.payee<0)return;
+      rows.slice(hi+1).forEach(r=>{
+        if(String(r[0]).indexOf('예시')===0)return;
+        const d=_impDate(r[c.d]);const amount=_impNum(r[c.amt]);
+        if(!d||!amount||d<from)return;
+        pays.push({applied:d,requester:String(r[c.req]||'').trim()||'시트',team:normalizeTeam(r[c.team]),purpose:String(r[c.why]||'').trim()+(c.memo>=0&&String(r[c.memo]||'').trim()?' · '+String(r[c.memo]).trim():''),bank:normBank(String(r[c.bank]||'').trim()),account:typeof r[c.acc]==='number'?String(Math.round(r[c.acc])):String(r[c.acc]||'').trim(),amount,unit:String(r[c.unit]||'').trim().toUpperCase()==='USD'?'USD':'원',payee:String(r[c.payee]||'').trim()||'(미기재)',tax:/^o$/i.test(String(c.tflag>=0?r[c.tflag]:'').trim()),tdate:c.tdate>=0?_impDate(r[c.tdate]):'',done:c.done>=0?_impDate(r[c.done]):''});
+      });
+    });
+    const invs=[];
+    wb.SheetNames.filter(n=>/세금계산서/.test(n)).forEach(n=>{
+      const ym=(n.match(/(\d{2})/)||[])[1];const defYear=ym?('20'+ym):'';
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:'',blankrows:false});
+      let hi=-1;for(let i=0;i<Math.min(rows.length,6);i++){if(rows[i].some(c=>String(c).includes('사업자등록번호'))){hi=i;break;}}
+      if(hi<0)return;
+      const H=rows[hi].map(c=>String(c).replace(/\s/g,''));const col=t=>H.findIndex(h=>h.includes(t));
+      const c={d:col('요청일'),req:col('요청자'),team:col('소속'),biz:col('사업자등록번호'),comp:col('상호'),email:col('이메일'),w:col('계산서작성일'),item:col('품목명'),supply:col('공급가액'),vat:col('부가세'),tot:col('세금계산서합계')>=0?col('세금계산서합계'):col('합계'),issued:col('계산서발급일')};
+      if(c.d<0||c.biz<0||c.tot<0)return;
+      rows.slice(hi+1).forEach(r=>{
+        if(String(r[c.req]||'').trim()==='예시')return;
+        const d=_impDate(r[c.d],defYear);const total=_impNum(r[c.tot]);
+        if(!d||!total||d<from)return;
+        invs.push({applied:d,requester:String(r[c.req]||'').trim()||'시트',team:normalizeTeam(r[c.team]),bizNo:digits(r[c.biz]),company:String(r[c.comp]||'').trim(),email:String(r[c.email]||'').trim(),writeDate:c.w>=0?_impDate(r[c.w],defYear):'',itemName:String(r[c.item]||'').trim(),supply:_impNum(c.supply>=0?r[c.supply]:0),vat:_impNum(c.vat>=0?r[c.vat]:0),total,issued:c.issued>=0?_impDate(r[c.issued],defYear):''});
+      });
+    });
+    const pkey=x=>digits(x.account)+'|'+(Number(x.amount)||0)+'|'+String(x.payee||'').replace(/\s/g,'');
+    const have=new Set(DB.payout.map(r=>pkey(r)));
+    const newPays=pays.filter(x=>!have.has(pkey(x))&&(have.add(pkey(x)),true));
+    const ikey=x=>digits(x.bizNo)+'|'+(Number(x.total)||0)+'|'+(x.writeDate||'');
+    const ihave=new Set(DB.invoice.map(r=>ikey(r)));
+    const newInvs=invs.filter(x=>!ihave.has(ikey(x))&&(ihave.add(ikey(x)),true));
+    if(!newPays.length&&!newInvs.length){log(`읽은 이체 ${pays.length}건 · 세금계산서 ${invs.length}건이 모두 이미 사이트에 있어요. (신규 없음)`);if(go)go.disabled=false;return;}
+    log(`이체 신규 ${newPays.length}건, 세금계산서 신규 ${newInvs.length}건 등록 중…`);
+    let ok=0,fail=0,iok=0,ifail=0;const failMsgs=[];
+    for(const x of newPays){
+      const p={payee:x.payee,bank:x.bank,account:x.account,amount:x.amount,unit:x.unit,category:_syncCat(x.purpose),purpose:x.purpose,evidence:'',hasTax:x.tax,proofType:x.tax?'세금계산서':'none',proofDate:x.tax?(x.tdate||x.applied):'',proofStatus:x.tax?'받을예정':'',proofReason:x.tax?'':'시트 동기화 건',wh:null,fuel:null,requester_name:x.requester,team:x.team,recurTotal:0};
+      const {error}=DRY?{error:null}:await sb.rpc('fin_submit_payout',{p});
+      if(error){fail++;failMsgs.push('[이체] '+x.payee+': '+error.message);}else ok++;
+    }
+    for(const x of newInvs){
+      const supply=x.supply||Math.round(x.total/1.1);
+      const p={company:x.company,bizNo:x.bizNo,ceo:'-',email:x.email||'-',saleType:'매출',writeDate:x.writeDate||x.applied,itemName:x.itemName||'-',supply,vat:x.vat||(x.total-supply),total:x.total,evidence:'',requester_name:x.requester,team:x.team};
+      const {error}=DRY?{error:null}:await sb.rpc('fin_submit_invoice',{p});
+      if(error){ifail++;failMsgs.push('[계산서] '+x.company+': '+error.message);}else iok++;
+    }
+    let paidN=0,issN=0;
+    if(!DRY){
+      log('지급완료·발행완료 표시 중…');
+      await loadData();
+      for(const x of newPays.filter(y=>y.done)){
+        const v=DB.payout.find(r=>r.status==='requested'&&pkey(r)===pkey(x));
+        if(v){const {error}=await sb.rpc('fin_decide_payout',{p_id:v.id,p_status:'paid',p_reason:''});if(!error)paidN++;}
+      }
+      for(const x of newInvs.filter(y=>y.issued)){
+        const v=DB.invoice.find(r=>r.status==='requested'&&ikey(r)===ikey(x));
+        if(v){const {error}=await sb.rpc('fin_decide_invoice',{p_id:v.id,p_status:'issued',p_reason:''});if(!error)issN++;}
+      }
+      await loadData();render();
+    }
+    log(`✅ ${DRY?'판독 완료 (데모 — 실제 등록 안 됨)':'완료!'}<br>이체요청: 신규 <b>${ok}건</b>${DRY?'':' 등록'}${paidN?` (지급완료 ${paidN}건)`:''} · 이미 있음 ${pays.length-newPays.length}건${fail?` · <span style="color:var(--sys-red)">실패 ${fail}건</span>`:''}<br>세금계산서: 신규 <b>${iok}건</b>${DRY?'':' 등록'}${issN?` (발행완료 ${issN}건)`:''} · 이미 있음 ${invs.length-newInvs.length}건${ifail?` · <span style="color:var(--sys-red)">실패 ${ifail}건</span>`:''}${failMsgs.length?'<br><span style="color:var(--sys-red)">'+failMsgs.slice(0,5).map(escH).join('<br>')+'</span>':''}`);
+    if(!DRY)toast('시트 동기화 완료.','ok');
+  }catch(e){log('오류: '+((e&&e.message)||e));}
+  if(go)go.disabled=false;
 }
 function _impNum(v){if(typeof v==='number')return v;const n=parseFloat(String(v).replace(/[,\s원]/g,''));return isNaN(n)?0:n;}
 function _impDate(v,defYear){
