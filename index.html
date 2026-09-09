@@ -1420,10 +1420,18 @@ function initColResize(key){
       hd.addEventListener('click',e=>e.stopPropagation());
       hd.addEventListener('mousedown',e=>{
         e.preventDefault();e.stopPropagation();hd.classList.add('drag');
-        const startX=e.clientX,startW=col.getBoundingClientRect().width;
-        const mv=ev=>{col.style.width=Math.max(42,startW+ev.clientX-startX)+'px';};
+        /* 드래그 시작: 모든 열을 현재 화면 크기로 고정하고 표 전체 폭도 고정 → 커서와 1:1로 움직임 */
+        const cols=[...cg.children];
+        const rendered=cols.map(c2=>c2.getBoundingClientRect().width);
+        cols.forEach((c2,j)=>{c2.style.width=rendered[j]+'px';});
+        let total=rendered.reduce((s,w2)=>s+w2,0);
+        tbl.style.width=total+'px';
+        const startX=e.clientX,startW=rendered[i];
+        const mv=ev=>{const w2=Math.max(42,startW+ev.clientX-startX);col.style.width=w2+'px';tbl.style.width=(total-startW+w2)+'px';};
         const up=ev=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);hd.classList.remove('drag');
-          saved[label]=Math.max(42,Math.round(startW+ev.clientX-startX));
+          /* 고정된 모든 열 너비 저장 (다음 렌더에서 그대로 복원) */
+          const ths2=[...tbl.querySelectorAll('thead th')];
+          cols.forEach((c2,j)=>{const lb=ths2[j]?ths2[j].textContent.replace(/[▲▼\s]/g,''):'';if(lb&&defs[lb])saved[lb]=Math.max(42,Math.round(c2.getBoundingClientRect().width));});
           try{localStorage.setItem(storeKey,JSON.stringify(saved));}catch(e2){}};
         document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
       });
