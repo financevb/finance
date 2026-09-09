@@ -744,7 +744,7 @@ function renderPayout(){
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 이체 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-payout"><thead><tr>';
   if(mineApprove)h+=`<th class="mhide" style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('payout')"></th>`;
-  h+=`<th class="sortable" onclick="setSort('payout','name')">거래처 · 적요${sortIcon('payout','name')}</th><th class="mhide">팀</th><th class="mhide">신청인</th><th class="mhide">분류</th><th class="sortable mhide" onclick="setSort('payout','date')">요청일${sortIcon('payout','date')}</th><th class="mhide">은행·계좌</th><th class="sortable" style="text-align:right" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th>상태</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="sortable" onclick="setSort('payout','name')">거래처 · 적요${sortIcon('payout','name')}</th><th class="mhide">팀</th><th class="mhide">신청인</th><th class="mhide">분류</th><th class="sortable mhide" onclick="setSort('payout','date')">요청일${sortIcon('payout','date')}</th><th class="mhide">은행·계좌</th><th class="sortable" style="text-align:right" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
   list.forEach(r=>{
     const st=PSTATUS[r.status]||['?',''];const flags=r.status==='requested'?scanPayout(r):[];
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
@@ -756,6 +756,7 @@ function renderPayout(){
     h+=`<td class="mhide">${escH(r.bank||'-')}<div class="t-sub num">${escH(r.account||'')}</div></td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span>${r.unit!=='원'?' <span class="t-sub">'+r.unit+'</span>':''}</td>`;
     h+=`<td class="mhide" style="max-width:175px;white-space:normal">${flags.length?`<span class="flagwrap" onclick="event.stopPropagation();anomalyDetail('${r.id}')" title="클릭하면 감지 근거 보기">${flags.map(flagHtml).join('')}</span>`:''}${isBig(r)?(flags.length?' ':'')+'<span class="tag tag-blue">🔺 고액</span>':(flags.length?'':'<span class="t-sub">–</span>')}</td>`;
+    h+=`<td class="mhide">${r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--billy-blue);text-decoration:underline;font-size:12px;white-space:nowrap">📎 링크 ↗</a>`:'<span class="t-sub">–</span>'}</td>`;
     h+=`<td>${mineApprove?`<button class="badge ${st[1]}" onclick="event.stopPropagation();openStatusMenu('${r.id}',event)" title="클릭해서 상태 변경">${st[0]}<span class="caret">▼</span></button>`:`<span class="badge ${st[1]}">${st[0]}</span>`}</td>`;
     h+='<td><div class="rowact">';
     h+=`<button class="iconbtn" title="복제" onclick="event.stopPropagation();clonePayout('${r.id}')">${I.copy}</button>`;
@@ -1399,7 +1400,7 @@ function renderInvoice(){
 /* 표 열 너비 드래그 조절 (공용) — localStorage 저장, 열 제목 기준 */
 const COLW_DEF={
   invoice:{'요청일':86,'요청자':74,'상호':170,'이메일':160,'작성일':86,'품목명':210,'유형':56,'공급가액':96,'부가세액':90,'합계':104,'실제입금액':98,'내용':140,'발급일':86,'상태':94,'입금확인':110},
-  payout:{'거래처·적요':280,'팀':70,'신청인':80,'분류':105,'요청일':100,'은행·계좌':160,'금액':115,'이상·고액':115,'상태':115}
+  payout:{'거래처·적요':280,'팀':70,'신청인':80,'분류':105,'요청일':100,'은행·계좌':160,'금액':115,'이상·고액':110,'증빙/비고':90,'상태':115}
 };
 function initColResize(key){
   const tbl=document.querySelector('#content table.rsz-'+key);if(!tbl||tbl._rszDone)return;tbl._rszDone=true;
