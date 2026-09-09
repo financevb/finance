@@ -747,15 +747,16 @@ function renderPayout(){
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 이체 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-payout"><thead><tr>';
   if(mineApprove)h+=`<th class="mhide" style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('payout')"></th>`;
-  h+=`<th class="sortable" onclick="setSort('payout','name')">거래처 · 적요${sortIcon('payout','name')}</th><th class="mhide">팀</th><th class="mhide">신청인</th><th class="mhide">분류</th><th class="sortable mhide" onclick="setSort('payout','date')">요청일${sortIcon('payout','date')}</th><th class="mhide">은행·계좌</th><th class="sortable" style="text-align:right" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="sortable mhide" onclick="setSort('payout','date')">요청일${sortIcon('payout','date')}</th><th class="mhide">신청인</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('payout','name')">거래처 · 적요${sortIcon('payout','name')}</th><th class="mhide">분류</th><th class="mhide">은행·계좌</th><th class="sortable" style="text-align:right" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
   list.forEach(r=>{
     const st=PSTATUS[r.status]||['?',''];const flags=r.status==='requested'?scanPayout(r):[];
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
-    h+=`<td><div class="t-name">${escH(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</div><div class="t-sub">${escH(r.purpose||'-')}</div></td>`;
-    h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td><td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
-    h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.category||'-')}</span></td>`;
     h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.applied||'-')}${r.appliedTs?`<div style="font-size:11px;color:var(--gray-400)">${escH(r.appliedTs.slice(11))}</div>`:''}</td>`;
+    h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
+    h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td>`;
+    h+=`<td><div class="t-name">${escH(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</div><div class="t-sub">${escH(r.purpose||'-')}</div></td>`;
+    h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.category||'-')}</span></td>`;
     h+=`<td class="mhide">${escH(r.bank||'-')}<div class="t-sub num">${escH(r.account||'')}</div></td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span>${r.unit!=='원'?' <span class="t-sub">'+r.unit+'</span>':''}</td>`;
     h+=`<td class="mhide" style="max-width:175px;white-space:normal">${flags.length?`<span class="flagwrap" onclick="event.stopPropagation();anomalyDetail('${r.id}')" title="클릭하면 감지 근거 보기">${flags.map(flagHtml).join('')}</span>`:''}${isBig(r)?(flags.length?' ':'')+'<span class="tag tag-blue">🔺 고액</span>':(flags.length?'':'<span class="t-sub">–</span>')}</td>`;
