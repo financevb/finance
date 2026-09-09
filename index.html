@@ -379,6 +379,7 @@ const canViewAll=()=>['viewer','finance','exec'].includes(ROLE);
 const canApprove=()=>['finance','exec','viewer'].includes(ROLE); // 처리(지급완료/반려/상태변경 등) = 데모 재무·데모 대표·데모 조회(admin 3인)
 const canReject=()=>canApprove()&&ME().name==='정채영'; // 이체 반려는 정채영만 가능
 const canDeposit=()=>canApprove()&&ME().name==='정채영'; // 입금확인·실제입금액·내용 기입도 정채영만
+const canManageAll=()=>canApprove()&&ME().name==='정채영'; // 정채영은 모든 요청 수정·삭제 가능
 const canVendorAdmin=()=>['finance','exec','viewer'].includes(ROLE); // 신규 거래처 승인·등록 = admin 3인
 const THRESHOLD_NOTIFY=THRESHOLD; // 1천만+ → 데모 대표 대표 메일 통지(승인 아님)
 const isBig=r=>!!(r&&r.unit==='원'&&(Number(r.amount)||0)>=THRESHOLD);
@@ -869,7 +870,9 @@ function submitPayout(){
   const go=()=>{
     _paySubmitting=true;
     const sbtn=document.querySelector('#ov .modal-foot .btn-primary');if(sbtn)sbtn.disabled=true;
-    let pr=sv('fin_submit_payout',{p:payoutPayload(r,recur?total:0)},()=>{
+    const pl=payoutPayload(r,recur?total:0);
+    if(editId){const old=DB.payout.find(x=>x.id===editId);if(old&&old.requester){pl.requester_name=old.requester;pl.team=old.team;r.requester=old.requester;r.team=old.team;}} /* 관리자가 남의 요청 수정 시 원래 신청인 유지 */
+    let pr=sv('fin_submit_payout',{p:pl},()=>{
       if(editId){const old=DB.payout.find(x=>x.id===editId);if(old)old.status='canceled';}
       DB.payout.unshift(r);
       if(recur&&total>1)DB.templates.push({id:uid('t'),requester:r.requester,team:r.team,payee:r.payee,bank:r.bank,account:r.account,amount:r.amount,category:r.category,purpose:r.purpose,hasTax:r.hasTax,total,done:1,nextDate:addMonth(today(),1)});
@@ -904,13 +907,14 @@ function submitFuel(){
   sv('fin_submit_payout',{p:payoutPayload(r,0)},()=>{DB.payout.unshift(r);}).then(()=>{closeModal();current='payout';render();toast('유류비 신청을 등록했어요.','ok');});
 }
 function clonePayout(id){const r=DB.payout.find(x=>x.id===id);if(!r)return;openPayoutForm({payee:r.payee,bank:r.bank,account:r.account,amount:r.amount,unit:r.unit,category:r.category,purpose:r.purpose,proofType:r.proofType});toast('과거 요청을 복제했어요.','ok');}
-function canEditPayout(r){return r&&r.status==='requested'&&!r.fuel&&r.category!=='유류비'&&!r.wh&&r.requester===ME().name;}
-function canDeletePayout(r){return r&&r.status!=='paid'&&r.requester===ME().name;} /* 본인 작성 건만, 지급완료는 삭제 불가 */
+function canEditPayout(r){return r&&r.status==='requested'&&!r.fuel&&r.category!=='유류비'&&!r.wh&&(r.requester===ME().name||canManageAll());}
+function canDeletePayout(r){return r&&r.status!=='paid'&&(r.requester===ME().name||canManageAll());} /* 본인 작성 건 + 정채영은 전체, 지급완료는 삭제 불가 */
 function deletePayout(id){
   const r=DB.payout.find(x=>x.id===id);if(!canDeletePayout(r))return;
-  /* 서버의 취소 기능을 이용 — 취소 건은 목록에서 기본 숨김이라 화면상 삭제와 동일 */
+  /* 서버의 취소 기능을 이용 — 취소 건은 목록에서 기본 숨김이라 화면상 삭제와 동일. 관리자는 상태변경 RPC로 타인 건도 처리 */
   confirmModal('🗑 이체 요청 삭제',`<b>${escH(r.payee)}</b> · ${won(r.amount)}${r.unit==='원'?'원':' '+r.unit}<br><br>이 요청을 목록에서 삭제할까요?`,()=>{
-    sv('fin_cancel_payout',{p_id:id},()=>{const x=DB.payout.find(y=>y.id===id);if(x)x.status='canceled';})
+    const mock=()=>{const x=DB.payout.find(y=>y.id===id);if(x)x.status='canceled';};
+    (canApprove()?sv('fin_set_payout_status',{p_id:id,p_status:'canceled'},mock):sv('fin_cancel_payout',{p_id:id},mock))
       .then(()=>{closeModal();render();toast('삭제했어요.','ok');})
       .catch(()=>{});
   });
@@ -1469,14 +1473,16 @@ function submitInvoice(){const supply=numVal('i_supply');const r={id:uid('v'),re
   _invSubmitting=true;
   const sbtn=document.querySelector('#ov .modal-foot .btn-primary');if(sbtn)sbtn.disabled=true;
   const editId=_editInvoiceId;
+  const ipl=invoicePayload(r);
+  if(editId){const old=DB.invoice.find(x=>x.id===editId);if(old&&old.requester){ipl.requester_name=old.requester;ipl.team=old.team;r.requester=old.requester;r.team=old.team;}} /* 관리자가 남의 요청 수정 시 원래 신청인 유지 */
   /* 수정 모드: 기존 요청을 먼저 취소하고 새로 등록 (취소 실패 시 중복 등록 방지) */
   let pr=editId?sv('fin_decide_invoice',{p_id:editId,p_status:'canceled',p_reason:'수정으로 재등록'},()=>{const old=DB.invoice.find(x=>x.id===editId);if(old)old.status='canceled';}):Promise.resolve();
-  pr.then(()=>sv('fin_submit_invoice',{p:invoicePayload(r)},()=>{DB.invoice.unshift(r);}))
+  pr.then(()=>sv('fin_submit_invoice',{p:ipl},()=>{DB.invoice.unshift(r);}))
     .then(()=>{_invSubmitting=false;_editInvoiceId=null;closeModal();render();toast(editId?'발행 요청을 수정했어요. (기존 요청은 취소 처리)':'발행 요청을 등록했어요.','ok');})
     .catch(()=>{_invSubmitting=false;const b=document.querySelector('#ov .modal-foot .btn-primary');if(b)b.disabled=false;});
 }
 let _invSubmitting=false,_editInvoiceId=null;
-function canEditInvoice(r){return r&&r.status==='requested'&&r.requester===ME().name;} /* 작성자 본인만, 발행완료 후 수정 불가 */
+function canEditInvoice(r){return r&&r.status==='requested'&&(r.requester===ME().name||canManageAll());} /* 작성자 본인 + 정채영, 발행완료 후 수정 불가 */
 function editInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!canEditInvoice(r))return;openInvoiceForm({editId:id,company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:r.writeDate,itemName:r.itemName,supply:r.supply,evidence:r.evidence});}
 function cloneInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;openInvoiceForm({company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:today(),itemName:r.itemName,supply:r.supply});toast('복제했어요. 작성일 확인하세요.','ok');}
 function viewInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;const st=ISTATUS[r.status];
