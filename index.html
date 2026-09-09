@@ -96,8 +96,8 @@ a{color:inherit;text-decoration:none}
 .pli.pnone{color:var(--gray);cursor:default}
 .pli.pnone:hover{background:none}
 .table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:820px}
-thead th{text-align:left;color:var(--gray-600);font-weight:700;font-size:12.5px;padding:13px 14px;border-bottom:1.5px solid var(--gray-200);white-space:nowrap;background:var(--gray-50)}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:820px}
+thead th{text-align:left;color:var(--gray-600);font-weight:700;font-size:13px;padding:13px 14px;border-bottom:1.5px solid var(--gray-200);white-space:nowrap;background:var(--gray-50)}
 th.sortable{cursor:pointer;user-select:none}
 th.sortable:hover{color:var(--billy-blue)}
 th .ar{font-size:9px;margin-left:3px;color:var(--billy-blue)}
@@ -752,7 +752,7 @@ function renderPayout(){
     const st=PSTATUS[r.status]||['?',''];const flags=r.status==='requested'?scanPayout(r):[];
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
-    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.applied||'-')}${r.appliedTs?`<div style="font-size:11px;color:var(--gray-400)">${escH(r.appliedTs.slice(11))}</div>`:''}</td>`;
+    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.applied||'-')}${r.appliedTs?`<div style="font-size:12px;color:var(--gray-400)">${escH(r.appliedTs.slice(11))}</div>`:''}</td>`;
     h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
     h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td>`;
     h+=`<td><div class="t-name">${escH(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</div><div class="t-sub">${escH(r.purpose||'-')}</div></td>`;
