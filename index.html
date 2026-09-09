@@ -573,6 +573,8 @@ function visible(arr,kind){
   if(FILTER.teams.size)list=list.filter(r=>FILTER.teams.has(normalizeTeam(r.team)));
   /* 취소 건은 기본 숨김 — 필터에서 '취소'를 선택한 경우에만 표시 */
   if((kind==='payout'||kind==='fuel'||kind==='invoice')&&!FILTER.statuses.has('canceled'))list=list.filter(r=>r.status!=='canceled');
+  /* 세금계산서: 삭제·수정으로 반려 처리된 건도 기본 숨김 (반려 필터 선택 시에만 표시) */
+  if(kind==='invoice'&&!FILTER.statuses.has('rejected'))list=list.filter(r=>!(r.status==='rejected'&&/^(삭제됨|수정으로 재등록)$/.test(r.rejectReason||'')));
   if(FILTER.statuses.size)list=list.filter(r=>FILTER.statuses.has(r.status));
   if(FILTER.big&&kind==='payout')list=list.filter(r=>isBig(r));
   if(FILTER.anomaly&&kind==='payout')list=list.filter(r=>r.status==='requested'&&scanPayout(r).length);
@@ -1475,8 +1477,8 @@ function submitInvoice(){const supply=numVal('i_supply');const r={id:uid('v'),re
   const editId=_editInvoiceId;
   const ipl=invoicePayload(r);
   if(editId){const old=DB.invoice.find(x=>x.id===editId);if(old&&old.requester){ipl.requester_name=old.requester;ipl.team=old.team;r.requester=old.requester;r.team=old.team;}} /* 관리자가 남의 요청 수정 시 원래 신청인 유지 */
-  /* 수정 모드: 기존 요청을 먼저 취소하고 새로 등록 (취소 실패 시 중복 등록 방지) */
-  let pr=editId?sv('fin_decide_invoice',{p_id:editId,p_status:'canceled',p_reason:'수정으로 재등록'},()=>{const old=DB.invoice.find(x=>x.id===editId);if(old)old.status='canceled';}):Promise.resolve();
+  /* 수정 모드: 기존 요청을 먼저 반려(사유: 수정으로 재등록) 처리하고 새로 등록 — 서버가 취소 상태 미지원 */
+  let pr=editId?sv('fin_decide_invoice',{p_id:editId,p_status:'rejected',p_reason:'수정으로 재등록'},()=>{const old=DB.invoice.find(x=>x.id===editId);if(old){old.status='rejected';old.rejectReason='수정으로 재등록';}}):Promise.resolve();
   pr.then(()=>sv('fin_submit_invoice',{p:ipl},()=>{DB.invoice.unshift(r);}))
     .then(()=>{_invSubmitting=false;_editInvoiceId=null;closeModal();render();toast(editId?'발행 요청을 수정했어요. (기존 요청은 취소 처리)':'발행 요청을 등록했어요.','ok');})
     .catch(()=>{_invSubmitting=false;const b=document.querySelector('#ov .modal-foot .btn-primary');if(b)b.disabled=false;});
@@ -1486,8 +1488,9 @@ function canEditInvoice(r){return r&&r.status==='requested'&&(r.requester===ME()
 function canDeleteInvoice(r){return r&&r.status!=='issued'&&(r.requester===ME().name||canManageAll());} /* 발행완료는 삭제 불가 */
 function deleteInvoice(id){
   const r=DB.invoice.find(x=>x.id===id);if(!canDeleteInvoice(r))return;
+  /* 서버가 취소 상태를 지원하지 않아 반려(사유: 삭제됨)로 처리하고 목록에서 숨김 */
   confirmModal('🗑 발행 요청 삭제',`<b>${escH(r.company)}</b> · ${won(r.total)}원<br><br>이 발행 요청을 목록에서 삭제할까요?`,()=>{
-    sv('fin_decide_invoice',{p_id:id,p_status:'canceled',p_reason:'삭제'},()=>{const x=DB.invoice.find(y=>y.id===id);if(x)x.status='canceled';})
+    sv('fin_decide_invoice',{p_id:id,p_status:'rejected',p_reason:'삭제됨'},()=>{const x=DB.invoice.find(y=>y.id===id);if(x){x.status='rejected';x.rejectReason='삭제됨';}})
       .then(()=>{closeModal();render();toast('삭제했어요.','ok');})
       .catch(()=>{});
   });
@@ -1842,7 +1845,7 @@ async function loadMe(){
 }
 function fmtTs(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
 function _mapPayout(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:r.evidence_url,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
-function _mapInvoice(r){return {id:r.id,requester:r.requester_name,team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:r.evidence_url,status:r.status,applied:(r.created_at||'').slice(0,10),issuedAt:r.issued_date||''};}
+function _mapInvoice(r){return {id:r.id,requester:r.requester_name,team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:r.evidence_url,status:r.status,rejectReason:r.reject_reason||'',applied:(r.created_at||'').slice(0,10),issuedAt:r.issued_date||''};}
 function _mapCoupon(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,name:r.recipient_name,phone:r.recipient_phone,phoneNorm:r.recipient_phone_norm,amount:Number(r.amount)||0,code:r.code||'',status:r.status,hold:r.hold_reason||'',isOverride:r.is_override,memo:r.memo||'',createdAt:(r.created_at||'').slice(0,10)};}
 function _mapExpense(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
 async function fetchAllRows(factory){const PAGE=1000;let from=0,all=[];for(;;){const{data,error}=await factory().range(from,from+PAGE-1);if(error)throw error;all=all.concat(data||[]);if(!data||data.length<PAGE)break;from+=PAGE;}return all;}
