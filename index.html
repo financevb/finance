@@ -1395,7 +1395,7 @@ function renderInvoice(){
     h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.issuedAt||'-')}</td>`;
     h+=`<td><span class="badge ${st[1]}">${st[0]}</span>${r.status==='requested'?('<div style="margin-top:3px">'+(deadlineBadge(r.writeDate)||'')+'</div>'):''}</td>`;
     h+=`<td>${dd.d?(canDeposit()?`<button class="depbtn depon" onclick="event.stopPropagation();openDepositForm('${r.id}')" title="클릭해서 수정/취소">✔ ${escH(dd.d)}</button>`:`<span class="badge badge-deposit">✔ ${escH(dd.d)}</span>`):(r.status==='issued'?(canDeposit()?`<button class="depbtn" onclick="event.stopPropagation();openDepositForm('${r.id}')">☐ 미확인</button>`:'<span class="t-sub">미확인</span>'):'<span class="t-sub">–</span>')}</td>`;
-    h+=`<td><div class="rowact"><button class="iconbtn" title="홈택스 발행 엑셀" onclick="event.stopPropagation();exportInvoiceOne('${r.id}')">${I.download}</button><button class="iconbtn" title="복제" onclick="event.stopPropagation();cloneInvoice('${r.id}')">${I.copy}</button>${canEditInvoice(r)?`<button class="iconbtn" title="수정 (본인 작성 건)" onclick="event.stopPropagation();editInvoice('${r.id}')">✏️</button>`:''}</div></td></tr>`;
+    h+=`<td><div class="rowact"><button class="iconbtn" title="홈택스 발행 엑셀" onclick="event.stopPropagation();exportInvoiceOne('${r.id}')">${I.download}</button><button class="iconbtn" title="복제" onclick="event.stopPropagation();cloneInvoice('${r.id}')">${I.copy}</button>${canEditInvoice(r)?`<button class="iconbtn" title="수정" onclick="event.stopPropagation();editInvoice('${r.id}')">✏️</button>`:''}${canDeleteInvoice(r)?`<button class="iconbtn" title="삭제" onclick="event.stopPropagation();deleteInvoice('${r.id}')">${I.trash}</button>`:''}</div></td></tr>`;
   });
   h+='</tbody></table></div></div>';
   c.innerHTML=h;
@@ -1483,10 +1483,19 @@ function submitInvoice(){const supply=numVal('i_supply');const r={id:uid('v'),re
 }
 let _invSubmitting=false,_editInvoiceId=null;
 function canEditInvoice(r){return r&&r.status==='requested'&&(r.requester===ME().name||canManageAll());} /* 작성자 본인 + 정채영, 발행완료 후 수정 불가 */
+function canDeleteInvoice(r){return r&&r.status!=='issued'&&(r.requester===ME().name||canManageAll());} /* 발행완료는 삭제 불가 */
+function deleteInvoice(id){
+  const r=DB.invoice.find(x=>x.id===id);if(!canDeleteInvoice(r))return;
+  confirmModal('🗑 발행 요청 삭제',`<b>${escH(r.company)}</b> · ${won(r.total)}원<br><br>이 발행 요청을 목록에서 삭제할까요?`,()=>{
+    sv('fin_decide_invoice',{p_id:id,p_status:'canceled',p_reason:'삭제'},()=>{const x=DB.invoice.find(y=>y.id===id);if(x)x.status='canceled';})
+      .then(()=>{closeModal();render();toast('삭제했어요.','ok');})
+      .catch(()=>{});
+  });
+}
 function editInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!canEditInvoice(r))return;openInvoiceForm({editId:id,company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:r.writeDate,itemName:r.itemName,supply:r.supply,evidence:r.evidence});}
 function cloneInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;openInvoiceForm({company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:today(),itemName:r.itemName,supply:r.supply});toast('복제했어요. 작성일 확인하세요.','ok');}
 function viewInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;const st=ISTATUS[r.status];
-  const invEditBtn=canEditInvoice(r)?`<button class="btn btn-line btn-sm" onclick="closeModal();editInvoice('${id}')"><span>✏️ 수정</span></button>`:'';
+  const invEditBtn=(canEditInvoice(r)?`<button class="btn btn-line btn-sm" onclick="closeModal();editInvoice('${id}')"><span>✏️ 수정</span></button>`:'')+(canDeleteInvoice(r)?`<button class="btn btn-danger btn-sm" onclick="closeModal();deleteInvoice('${id}')"><span>🗑 삭제</span></button>`:'');
   let foot=`<button class="btn btn-line btn-sm" onclick="exportInvoiceOne('${id}')">${I.download}<span>홈택스 엑셀</span></button>${invEditBtn}<button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')">${I.copy}<span>복제</span></button><button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
   if(canApprove()&&r.status==='requested')foot=`<button class="btn btn-line btn-sm" onclick="exportInvoiceOne('${id}')">${I.download}<span>홈택스 엑셀</span></button>${invEditBtn}<button class="btn btn-danger" onclick="decideInvoice('${id}','rejected')">반려</button><button class="btn btn-primary" onclick="decideInvoice('${id}','issued')">발행완료</button>`;
   if(canApprove()&&r.status==='issued')foot=`<button class="btn btn-line btn-sm" onclick="exportInvoiceOne('${id}')">${I.download}<span>홈택스 엑셀</span></button><button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')">${I.copy}<span>복제</span></button>${canDeposit()?`<button class="btn btn-primary" onclick="openDepositForm('${id}')">${depositOf(id)?'✔ 입금확인됨 ('+depositOf(id)+')':'✔ 입금확인'}</button>`:`<button class="btn btn-secondary" onclick="closeModal()">닫기</button>`}`;
