@@ -29,8 +29,8 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 input,select,textarea{font-family:inherit;font-size:14px}
 a{color:inherit;text-decoration:none}
 .layout{display:flex;min-height:100vh}
-.sidebar{width:236px;background:var(--white);border-right:1px solid var(--gray-200);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;flex-shrink:0}
-.brand{display:flex;align-items:center;gap:10px;padding:22px 20px 18px}
+.sidebar{width:236px;background:var(--gray-50);border-right:1px solid var(--gray-200);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:10px;margin:14px 12px 4px;padding:12px 14px;background:#fff;border:1px solid var(--gray-200);border-radius:12px}
 .brand .logo{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:var(--sh-blue);flex-shrink:0;background:var(--billy-blue);color:#fff;font-weight:700;font-size:15px}
 .brand .tit{font-weight:700;font-size:16px;letter-spacing:-.3px}
 .brand .tit small{display:block;font-weight:400;font-size:11px;color:var(--gray)}
@@ -43,11 +43,11 @@ a{color:inherit;text-decoration:none}
 .nav-item .navemo svg,.mnav-item .navemo svg{stroke:none;fill:none}
 .navemo svg *{stroke:none}
 .navext{margin-left:auto;opacity:.4;font-size:11px}
-.nav-item{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:var(--r-md);color:var(--gray-700);font-weight:500;transition:.12s}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--gray-700);font-weight:500;font-size:14px;transition:.12s}
 .nav-item svg{width:19px;height:19px;flex-shrink:0;stroke:var(--gray-600);stroke-width:1.7;fill:none}
-.nav-item:hover{background:var(--gray-50)}
-.nav-item.active{background:var(--billy-blue-50);color:var(--billy-blue);font-weight:700}
-.nav-item.active svg{stroke:var(--billy-blue)}
+.nav-item:hover{background:var(--gray-100)}
+.nav-item.active{background:#E9EBEE;color:var(--gray-900);font-weight:700}
+.nav-item.active svg{stroke:var(--gray-900)}
 .nav-item .dot{margin-left:auto;background:var(--sys-red);color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .side-foot{margin-top:auto;padding:14px;border-top:1px solid var(--gray-100)}
 .userchip{display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--r-md)}
@@ -63,13 +63,13 @@ a{color:inherit;text-decoration:none}
 .page-h p{color:var(--gray);margin-top:5px;font-size:13px}
 .topbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .content{padding:8px 34px 48px;flex:1}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding:0 18px;border-radius:var(--r-md);font-weight:700;font-size:14px;transition:.12s;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding:0 16px;border-radius:8px;font-weight:600;font-size:14px;transition:.12s;white-space:nowrap}
 .btn svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none}
 .btn-sm{height:32px;padding:0 13px;font-size:13px}.btn-sm svg{width:14px;height:14px}
-.btn-primary{background:var(--billy-blue);color:#fff;box-shadow:var(--sh-blue)}
+.btn-primary{background:var(--billy-blue);color:#fff}
 .btn-primary:hover{background:var(--billy-blue-600)}
-.btn-line{background:#fff;color:var(--billy-blue);border:1.4px solid var(--billy-blue)}
-.btn-line:hover{background:var(--billy-blue-50)}
+.btn-line{background:var(--gray-100);color:var(--gray-700)}
+.btn-line:hover{background:var(--gray-200)}
 .btn-secondary{background:var(--gray-100);color:var(--gray-700)}
 .btn-secondary:hover{background:var(--gray-200)}
 .btn-danger{background:#fff;color:var(--sys-red);border:1.4px solid var(--sys-red)}
@@ -688,7 +688,7 @@ function render(){
   const p=PAGES[current];
   document.getElementById('pgTitle').textContent=p.t;document.getElementById('pgDesc').textContent=p.d;
   let act='';
-  if(current==='payout')act=`<button class="btn btn-line btn-sm" onclick="openTemplates()">🔁 정기</button><button class="btn btn-line btn-sm" onclick="openWHForm()">3.3% 지급</button><button class="btn btn-line btn-sm" onclick="openBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openPayoutForm()">${I.plus}<span>새 이체 요청</span></button>`;
+  if(current==='payout')act=`<button class="btn btn-line" onclick="openTemplates()">정기</button><button class="btn btn-line" onclick="openWHForm()">3.3% 지급</button><button class="btn btn-line" onclick="openBulkForm()">일괄</button><button class="btn btn-primary" onclick="openPayoutForm()">${I.plus}<span>새 이체 요청</span></button>`;
   if(current==='fuel')act=`<button class="btn btn-primary" onclick="openFuelForm()">${I.car}<span>유류비 신청</span></button>`;
   if(current==='expense')act=`<button class="btn btn-primary" onclick="openExpenseForm()">${I.plus}<span>지출결의 등록</span></button>`;
   if(current==='cardreport')act=`<button class="btn btn-line btn-sm" onclick="openCardBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openCardForm()">${I.plus}<span>기명 법카 신고</span></button>`;
