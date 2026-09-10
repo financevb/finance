@@ -56,7 +56,7 @@ a{color:inherit;text-decoration:none}
 .demo-note{font-size:11px;color:var(--gray-400);margin-top:8px;text-align:center;line-height:1.4}
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;padding:30px 34px 16px;gap:20px}
-.page-h h1{font-size:25px;font-weight:700;letter-spacing:-.6px}
+.page-h h1{font-size:22px;font-weight:700;letter-spacing:-.4px;color:var(--gray-900)}
 .page-h p{color:var(--gray);margin-top:5px;font-size:13px}
 .topbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .content{padding:8px 34px 48px;flex:1}
@@ -98,12 +98,12 @@ a{color:inherit;text-decoration:none}
 .pli.pnone{color:var(--gray);cursor:default}
 .pli.pnone:hover{background:none}
 .table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:12px;min-width:820px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
 thead th{text-align:left;color:var(--gray-600);font-weight:700;font-size:13px;padding:13px 14px;border-bottom:1.5px solid var(--gray-200);white-space:nowrap;background:var(--gray-50)}
 th.sortable{cursor:pointer;user-select:none}
 th.sortable:hover{color:var(--billy-blue)}
 th .ar{font-size:9px;margin-left:3px;color:var(--billy-blue)}
-tbody td{padding:13px 14px;border-bottom:1px solid var(--gray-100);vertical-align:middle}
+tbody td{padding:13px 14px;border-bottom:1px solid var(--gray-100);vertical-align:middle;color:var(--gray-800)}
 tbody tr:hover{background:var(--billy-blue-50)}
 tbody tr:last-child td{border-bottom:none}
 .t-name{font-weight:700;white-space:nowrap}
@@ -641,6 +641,8 @@ const FIN_LINKS=[
   ['빌베 페이스북','https://docs.google.com/spreadsheets/d/18RYHd7SvdydxK-8GI0PqowpLmRCu7KI1gzRszA9Z5FE/edit?usp=sharing','👥'],
   ['빌베 좌석배치도','https://seatboard.villagebaby.kr','💺'],
 ];
+/* 메뉴 아이콘 — 토스 상점관리자 스타일 컬러 이모지 */
+const NAV_EMO={invoice:'🧾',payout:'💸',fuel:'🚗',expense:'📝',cardreport:'💳',dashboard:'📊',coupon:'🎟️',vendors:'🏢',proof:'📎',anomaly:'⚠️',banklink:'🔗'};
 function buildNav(){
   let h='';let mh='';let curGroup='';
   NAV.forEach(([k,label,ic,grp,mlabel])=>{
@@ -656,8 +658,9 @@ function buildNav(){
     if(canApprove()&&k==='expense'){const c=DB.expense.filter(r=>r.status==='requested'&&r.method!=='named_card').length;if(c)dot=`<span class="dot">${c}</span>`;}
     if(canApprove()&&k==='cardreport'){const c=DB.expense.filter(r=>r.status==='requested'&&r.method==='named_card').length;if(c)dot=`<span class="dot">${c}</span>`;}
     const soon=k==='banklink'?'<span class="navsoon">예정</span>':'';
-    h+=`<div class="nav-item${current===k?' active':''}" onclick="go('${k}')">${I[ic]}<span>${label}</span>${soon}${dot}</div>`;
-    mh+=`<button class="mnav-item${current===k?' active':''}" onclick="go('${k}')">${I[ic]}<span>${escH(mlabel||label.split(' ')[0])}</span>${dot}</button>`;
+    const emo=`<span class="navemo">${NAV_EMO[k]||'•'}</span>`;
+    h+=`<div class="nav-item${current===k?' active':''}" onclick="go('${k}')">${emo}<span>${label}</span>${soon}${dot}</div>`;
+    mh+=`<button class="mnav-item${current===k?' active':''}" onclick="go('${k}')">${emo}<span>${escH(mlabel||label.split(' ')[0])}</span>${dot}</button>`;
   });
   h+='<div class="nav-label">바로가기</div>';
   FIN_LINKS.forEach(([lbl,url,emo])=>{h+=`<a class="nav-item navlink" href="${url}" target="_blank" rel="noopener"><span class="navemo">${emo}</span><span>${escH(lbl)}</span><span class="navext">↗</span></a>`;});
