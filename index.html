@@ -102,15 +102,15 @@ a{color:inherit;text-decoration:none}
 .pli.pnone:hover{background:none}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
-thead th{text-align:left;color:var(--gray-600);font-weight:700;font-size:13px;padding:13px 14px;border-bottom:1.5px solid var(--gray-200);white-space:nowrap;background:var(--gray-50)}
+thead th{text-align:center;color:var(--gray-700);font-weight:500;font-size:13px;padding:12px 10px;border:1px solid var(--gray-200);white-space:nowrap;background:var(--gray-50)}
 th.sortable{cursor:pointer;user-select:none}
 th.sortable:hover{color:var(--billy-blue)}
 th .ar{font-size:9px;margin-left:3px;color:var(--billy-blue)}
-tbody td{padding:13px 14px;border-bottom:1px solid var(--gray-100);vertical-align:middle;color:var(--gray-800)}
+tbody td{padding:12px 10px;border:1px solid var(--gray-100);vertical-align:middle;color:var(--gray-800);text-align:center;font-weight:400}
 tbody tr:hover{background:var(--billy-blue-50)}
 tbody tr:last-child td{border-bottom:none}
-.t-name{font-weight:700;white-space:nowrap}
-.t-sub{color:var(--gray);font-size:12px}
+.t-name{font-weight:500;color:var(--gray-900);white-space:nowrap}
+.t-sub{color:var(--gray);font-size:12px;font-weight:400}
 .nmcell{word-break:keep-all}
 th.rz{position:relative;width:var(--cw,300px);min-width:120px}.rzh{position:absolute;top:16%;right:-3px;width:8px;height:68%;cursor:col-resize;z-index:3;border-right:2px solid var(--gray-200)}.rzh:hover,.rzh.drag{border-right-color:var(--billy-blue)}td.rzc>div{max-width:var(--cw,300px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}td.rzc>.t-name{white-space:normal;text-overflow:clip;line-height:1.35}
 .period-bar{margin-bottom:12px}.sortctl{display:inline-flex;align-items:center;gap:6px}.sortctl .sl{font-size:12px;color:var(--gray);font-weight:600}.filters select{height:34px;border:1px solid var(--gray-200);border-radius:9px;padding:0 8px;font-size:12.5px;background:#fff;color:var(--gray-800);cursor:pointer}.seg-range{display:flex;align-items:center;gap:8px;margin:9px 0 2px;font-size:13px;color:var(--gray-700)}.seg-range input{height:34px;padding:0 10px;border:1px solid var(--gray-200);border-radius:9px;font-size:13px}
@@ -121,7 +121,7 @@ th.rz{position:relative;width:var(--cw,300px);min-width:120px}.rzh{position:abso
 .filtwrap{position:relative;z-index:60}.filterpop{position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.14);padding:14px 16px;min-width:300px;max-width:min(92vw,420px)}.filtpop-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--gray-100)}.filt-backdrop{position:fixed;inset:0;z-index:55;background:transparent}
 .mnav{display:none}.mnav-item{display:inline-flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;border:none;background:transparent;color:var(--gray-600);font-size:11px;font-weight:600;padding:5px 13px;border-radius:10px;cursor:pointer;position:relative}.mnav-item svg{width:20px;height:20px;stroke:var(--gray-600);stroke-width:1.7;fill:none}.mnav-item.active{color:var(--billy-blue);background:var(--billy-blue-50)}.mnav-item.active svg{stroke:var(--billy-blue)}.mnav-item .dot{position:absolute;top:1px;right:8px;margin:0}
 .num{font-variant-numeric:tabular-nums;white-space:nowrap}
-.amt{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.amt{font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
 .ellip{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap}
 .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
@@ -157,23 +157,25 @@ button.badge:hover{filter:brightness(.96)}
 .flag.info{background:var(--billy-blue-50);color:var(--billy-blue)}
 .overlay{position:fixed;inset:0;background:rgba(31,35,41,.45);display:flex;align-items:center;justify-content:center;z-index:100;padding:24px;animation:fade .15s}
 @keyframes fade{from{opacity:0}to{opacity:1}}
-.modal{background:#fff;border-radius:var(--r-card);box-shadow:var(--sh-xl);width:520px;max-width:100%;max-height:92vh;display:flex;flex-direction:column;animation:pop .18s}
+.modal{background:#fff;border-radius:24px;box-shadow:var(--sh-xl);width:560px;max-width:100%;max-height:92vh;display:flex;flex-direction:column;animation:pop .18s}
 .modal.wide{width:700px}
 @keyframes pop{from{transform:translateY(12px) scale(.98);opacity:.6}to{transform:none;opacity:1}}
-.modal-head{display:flex;align-items:center;justify-content:space-between;padding:22px 24px 6px}
-.modal-head h3{font-size:18px;font-weight:700}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:26px 28px 6px}
+.modal-head h3{font-size:19px;font-weight:700;letter-spacing:-.3px}
 .modal-head .x{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--gray)}
 .modal-head .x:hover{background:var(--gray-100)}
-.modal-body{padding:14px 24px;overflow-y:auto}
-.modal-foot{padding:16px 24px 22px;display:flex;gap:10px}
-.modal-foot .btn{flex:1}
+.modal-body{padding:16px 28px;overflow-y:auto}
+.modal-foot{padding:18px 28px 26px;display:flex;gap:10px;justify-content:flex-end}
+.modal-foot .btn{height:46px;padding:0 26px;border-radius:12px;font-size:15px}
+.modal-foot .btn-sm{height:46px;font-size:14px;padding:0 18px}
 .form-row{margin-bottom:15px}
-.form-row>label{display:block;font-weight:700;font-size:13px;margin-bottom:7px}
+.form-row>label{display:block;font-weight:500;font-size:13px;color:var(--gray-700);margin-bottom:8px}
 .form-row .req{color:var(--billy-blue)}
 .form-row .hint{color:var(--gray);font-weight:400;font-size:12px;margin-left:4px}
-.input,textarea.input{width:100%;height:42px;border:1.4px solid var(--gray-300);border-radius:var(--r-md);padding:0 13px;background:#fff}
-textarea.input{height:auto;padding:11px 13px;resize:vertical;min-height:60px}
-.input:focus,textarea.input:focus{outline:none;border-color:var(--billy-blue);box-shadow:0 0 0 3px var(--billy-blue-50)}
+.input,textarea.input{width:100%;height:48px;border:1px solid var(--gray-200);border-radius:12px;padding:0 14px;background:#fff;color:var(--gray-900)}
+textarea.input{height:auto;padding:13px 14px;resize:vertical;min-height:64px}
+.input:focus,textarea.input:focus{outline:none;border-color:var(--billy-blue);box-shadow:0 0 0 2px var(--billy-blue-100)}
+.input::placeholder,textarea.input::placeholder{color:var(--gray-400)}
 select.input{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23898989' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .preview-box{background:var(--billy-blue-50);border-radius:var(--r-md);padding:12px 15px;display:flex;justify-content:space-between;align-items:center;font-size:13px;gap:10px;flex-wrap:wrap}
@@ -766,7 +768,7 @@ function renderPayout(){
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 이체 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-payout"><thead><tr>';
   if(mineApprove)h+=`<th class="mhide" style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('payout')"></th>`;
-  h+=`<th class="sortable mhide" onclick="setSort('payout','date')">요청일${sortIcon('payout','date')}</th><th class="mhide">신청인</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('payout','name')">거래처 · 적요${sortIcon('payout','name')}</th><th class="mhide">분류</th><th class="mhide">은행·계좌</th><th class="sortable" style="text-align:right" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="sortable mhide" onclick="setSort('payout','date')">요청일${sortIcon('payout','date')}</th><th class="mhide">신청인</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('payout','name')">거래처 · 적요${sortIcon('payout','name')}</th><th class="mhide">분류</th><th class="mhide">은행·계좌</th><th class="sortable" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
   list.forEach(r=>{
     const st=PSTATUS[r.status]||['?',''];const flags=r.status==='requested'?scanPayout(r):[];
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
@@ -774,9 +776,9 @@ function renderPayout(){
     h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.applied||'-')}${r.appliedTs?`<div style="font-size:12px;color:var(--gray-400)">${escH(r.appliedTs.slice(11))}</div>`:''}</td>`;
     h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
     h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td>`;
-    h+=`<td><div class="t-name">${escH(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</div><div class="t-sub">${escH(r.purpose||'-')}</div></td>`;
+    h+=`<td style="text-align:left"><div class="t-name">${escH(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</div><div class="t-sub">${escH(r.purpose||'-')}</div></td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.category||'-')}</span></td>`;
-    h+=`<td class="mhide">${escH(r.bank||'-')}<div class="t-sub num">${escH(r.account||'')}</div></td>`;
+    h+=`<td class="mhide" style="text-align:left">${escH(r.bank||'-')}<div class="t-sub num">${escH(r.account||'')}</div></td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span>${r.unit!=='원'?' <span class="t-sub">'+r.unit+'</span>':''}</td>`;
     h+=`<td class="mhide" style="max-width:175px;white-space:normal">${flags.length?`<span class="flagwrap" onclick="event.stopPropagation();anomalyDetail('${r.id}')" title="클릭하면 감지 근거 보기">${flags.map(flagHtml).join('')}</span>`:''}${isBig(r)?(flags.length?' ':'')+'<span class="tag tag-blue">🔺 고액</span>':(flags.length?'':'<span class="t-sub">–</span>')}</td>`;
     h+=`<td class="mhide">${r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--billy-blue);text-decoration:underline;font-size:12px;white-space:nowrap">📎 링크 ↗</a>`:'<span class="t-sub">–</span>'}</td>`;
@@ -1397,23 +1399,23 @@ function renderInvoice(){
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 발행 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-invoice"><thead><tr>';
   if(mineApprove)h+=`<th style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('invoice')"></th>`;
-  h+=`<th class="sortable" onclick="setSort('invoice','date')">요청일${sortIcon('invoice','date')}</th><th class="mhide">요청자</th><th class="sortable" onclick="setSort('invoice','name')">상호${sortIcon('invoice','name')}</th><th class="mhide">이메일</th><th class="sortable mhide" onclick="setSort('invoice','writeDate')">작성일${sortIcon('invoice','writeDate')}</th><th>품목명</th><th class="mhide">유형</th><th class="mhide" style="text-align:right">공급가액</th><th class="mhide" style="text-align:right">부가세액</th><th class="sortable" style="text-align:right" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide" style="text-align:right">실제입금액</th><th class="mhide">내용</th><th class="mhide">발급일</th><th>상태</th><th>입금확인</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="sortable" onclick="setSort('invoice','date')">요청일${sortIcon('invoice','date')}</th><th class="mhide">요청자</th><th class="sortable" onclick="setSort('invoice','name')">상호${sortIcon('invoice','name')}</th><th class="mhide">이메일</th><th class="sortable mhide" onclick="setSort('invoice','writeDate')">작성일${sortIcon('invoice','writeDate')}</th><th>품목명</th><th class="mhide">유형</th><th class="mhide">공급가액</th><th class="mhide">부가세액</th><th class="sortable" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide">실제입금액</th><th class="mhide">내용</th><th class="mhide">발급일</th><th>상태</th><th>입금확인</th><th></th></tr></thead><tbody>`;
   list.forEach(r=>{const st=ISTATUS[r.status];
     h+=`<tr class="rowclk" onclick="viewInvoice('${r.id}')">`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
     h+=`<td class="t-sub num" style="white-space:nowrap">${escH(r.applied||'-')}</td>`;
     h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}<div class="t-sub">${escH(normalizeTeam(r.team)||'')}</div></td>`;
-    h+=`<td><div class="t-name">${escH(r.company)}</div><div class="t-sub num">${escH(r.bizNo)}</div></td>`;
-    h+=`<td class="mhide" style="font-size:12px;word-break:break-all">${escH(r.email||'-')}</td>`;
+    h+=`<td style="text-align:left"><div class="t-name">${escH(r.company)}</div><div class="t-sub num">${escH(r.bizNo)}</div></td>`;
+    h+=`<td class="mhide" style="font-size:12px;word-break:break-all;text-align:left">${escH(r.email||'-')}</td>`;
     h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.writeDate||'-')}</td>`;
-    h+=`<td><div class="ellip">${escH(r.itemName)}</div></td>`;
+    h+=`<td style="text-align:left"><div class="ellip">${escH(r.itemName)}</div></td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.saleType||'매출')}</span></td>`;
     h+=`<td class="mhide num" style="text-align:right">${won(r.supply)}</td>`;
     h+=`<td class="mhide num" style="text-align:right">${won(r.tax)}</td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.total)}</span></td>`;
     const dd=depData(r.id);
     h+=`<td class="mhide num" style="text-align:right">${dd.amt?`<span${dd.amt!==r.total?' style="color:var(--sys-orange);font-weight:700" title="세금계산서 합계와 달라요"':''}>${won(dd.amt)}</span>`:'<span class="t-sub">–</span>'}</td>`;
-    h+=`<td class="mhide" style="max-width:160px">${canDeposit()?`<div style="font-size:12px;white-space:normal;word-break:break-all;cursor:pointer;line-height:1.4" onclick="event.stopPropagation();openDepositForm('${r.id}')" title="클릭해서 메모 입력">${dd.note?escH(dd.note):'<span class="t-sub">＋ 메모</span>'}</div>`:`<div style="font-size:12px;white-space:normal;word-break:break-all;line-height:1.4">${dd.note?escH(dd.note):'<span class="t-sub">–</span>'}</div>`}</td>`;
+    h+=`<td class="mhide" style="max-width:160px;text-align:left">${canDeposit()?`<div style="font-size:12px;white-space:normal;word-break:break-all;cursor:pointer;line-height:1.4" onclick="event.stopPropagation();openDepositForm('${r.id}')" title="클릭해서 메모 입력">${dd.note?escH(dd.note):'<span class="t-sub">＋ 메모</span>'}</div>`:`<div style="font-size:12px;white-space:normal;word-break:break-all;line-height:1.4">${dd.note?escH(dd.note):'<span class="t-sub">–</span>'}</div>`}</td>`;
     h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.issuedAt||'-')}</td>`;
     h+=`<td><span class="badge ${st[1]}">${st[0]}</span>${r.status==='requested'?('<div style="margin-top:3px">'+(deadlineBadge(r.writeDate)||'')+'</div>'):''}</td>`;
     h+=`<td>${dd.d?(canDeposit()?`<button class="depbtn depon" onclick="event.stopPropagation();openDepositForm('${r.id}')" title="클릭해서 수정/취소">✔ ${escH(dd.d)}</button>`:`<span class="badge badge-deposit">✔ ${escH(dd.d)}</span>`):(r.status==='issued'?(canDeposit()?`<button class="depbtn" onclick="event.stopPropagation();openDepositForm('${r.id}')">☐ 미확인</button>`:'<span class="t-sub">미확인</span>'):'<span class="t-sub">–</span>')}</td>`;
