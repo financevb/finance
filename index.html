@@ -39,6 +39,9 @@ a{color:inherit;text-decoration:none}
 .navsoon{font-size:9.5px;background:var(--gray-100);color:var(--gray);padding:1px 6px;border-radius:8px;margin-left:auto;font-weight:600;flex-shrink:0}
 .nav-item.navlink{text-decoration:none}
 .navemo{width:22px;display:inline-flex;justify-content:center;font-size:15px;flex-shrink:0}
+.navemo svg{width:20px;height:20px;display:block}
+.nav-item .navemo svg,.mnav-item .navemo svg{stroke:none;fill:none}
+.navemo svg *{stroke:none}
 .navext{margin-left:auto;opacity:.4;font-size:11px}
 .nav-item{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:var(--r-md);color:var(--gray-700);font-weight:500;transition:.12s}
 .nav-item svg{width:19px;height:19px;flex-shrink:0;stroke:var(--gray-600);stroke-width:1.7;fill:none}
@@ -641,8 +644,15 @@ const FIN_LINKS=[
   ['빌베 페이스북','https://docs.google.com/spreadsheets/d/18RYHd7SvdydxK-8GI0PqowpLmRCu7KI1gzRszA9Z5FE/edit?usp=sharing','👥'],
   ['빌베 좌석배치도','https://seatboard.villagebaby.kr','💺'],
 ];
-/* 메뉴 아이콘 — 토스 상점관리자 스타일 컬러 이모지 */
-const NAV_EMO={invoice:'🧾',payout:'💸',fuel:'🚗',expense:'📝',cardreport:'💳',dashboard:'📊',coupon:'🎟️',vendors:'🏢',proof:'📎',anomaly:'⚠️',banklink:'🔗'};
+/* 메뉴 아이콘 — 토스 상점관리자 스타일 컬러 픽토그램(SVG) */
+const NAV_EMO={
+  invoice:'<svg viewBox="0 0 24 24"><rect x="4" y="2.5" width="16" height="19" rx="3.5" fill="#03B26C"/><rect x="7.5" y="7" width="9" height="1.9" rx=".95" fill="#fff"/><rect x="7.5" y="11" width="9" height="1.9" rx=".95" fill="#fff"/><rect x="7.5" y="15" width="5.5" height="1.9" rx=".95" fill="#fff"/></svg>',
+  payout:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="#00C471"/><text x="12" y="15.8" text-anchor="middle" font-size="11.5" font-weight="800" fill="#fff">w</text></svg>',
+  cardreport:'<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14.5" rx="3" fill="#3182F6"/><rect x="2.5" y="8.4" width="19" height="3.1" fill="#1B64DA"/><rect x="6" y="14.8" width="6" height="1.9" rx=".95" fill="#fff"/></svg>',
+  expense:'<svg viewBox="0 0 24 24"><g fill="#3182F6"><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45"/><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45" transform="rotate(60 12 12)"/><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45" transform="rotate(120 12 12)"/></g></svg>',
+  vendors:'<svg viewBox="0 0 24 24"><rect x="5" y="2.8" width="14" height="18.4" rx="2.8" fill="#03B26C"/><g fill="#fff"><rect x="8" y="6.3" width="3" height="3" rx=".9"/><rect x="13" y="6.3" width="3" height="3" rx=".9"/><rect x="8" y="11.2" width="3" height="3" rx=".9"/><rect x="13" y="11.2" width="3" height="3" rx=".9"/><rect x="10.4" y="16.4" width="3.2" height="4.8" rx=".9"/></g></svg>',
+  dashboard:'<svg viewBox="0 0 24 24"><rect x="4.5" y="2.5" width="15" height="19" rx="3.2" fill="#333D4B"/><rect x="7.2" y="5.2" width="9.6" height="4.2" rx="1.3" fill="#00C471"/><g fill="#fff"><circle cx="8.9" cy="12.9" r="1.25"/><circle cx="12" cy="12.9" r="1.25"/><circle cx="15.1" cy="12.9" r="1.25"/><circle cx="8.9" cy="16.6" r="1.25"/><circle cx="12" cy="16.6" r="1.25"/><circle cx="15.1" cy="16.6" r="1.25"/></g></svg>',
+  fuel:'🚗',coupon:'🎟️',proof:'📎',anomaly:'⚠️',banklink:'🔗'};
 function buildNav(){
   let h='';let mh='';let curGroup='';
   NAV.forEach(([k,label,ic,grp,mlabel])=>{
