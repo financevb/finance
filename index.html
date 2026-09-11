@@ -102,11 +102,27 @@ a{color:inherit;text-decoration:none}
 .pli.pnone:hover{background:none}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
-thead th{text-align:center;color:var(--gray-700);font-weight:500;font-size:13px;padding:12px 10px;border:1px solid var(--gray-200);white-space:nowrap;background:var(--gray-50)}
+thead th{text-align:center;color:var(--gray-700);font-weight:500;font-size:12.5px;padding:9px 8px;border:1px solid var(--gray-200);white-space:nowrap;background:var(--gray-50)}
 th.sortable{cursor:pointer;user-select:none}
 th.sortable:hover{color:var(--billy-blue)}
 th .ar{font-size:9px;margin-left:3px;color:var(--billy-blue)}
-tbody td{padding:12px 10px;border:1px solid var(--gray-100);vertical-align:middle;color:var(--gray-800);text-align:center;font-weight:400}
+tbody td{padding:8px 8px;border:1px solid var(--gray-100);vertical-align:middle;color:var(--gray-800);text-align:center;font-weight:400;font-size:12.5px}
+.rowno{color:var(--gray-400);font-size:12px}
+.pager{display:flex;gap:4px;justify-content:flex-end;align-items:center;margin-top:14px}
+.pager .pg{min-width:28px;height:28px;padding:0 6px;border-radius:6px;font-size:12.5px;color:var(--gray-600);background:none;display:inline-flex;align-items:center;justify-content:center}
+.pager .pg:hover{background:var(--gray-100)}
+.pager .pg.cur{background:var(--gray-900);color:#fff;font-weight:700}
+.pager .pg:disabled{opacity:.35;cursor:default}
+.pgdot{color:var(--gray-400);padding:0 2px}
+.statrow{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch;margin-bottom:16px}
+.stat{flex:1;min-width:200px;background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:14px 18px 14px 22px;position:relative;display:flex;flex-direction:column;gap:4px;justify-content:center}
+.stat::before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:2px;background:var(--sys-green)}
+.stat.o::before{background:var(--sys-orange)}
+.stat.b::before{background:var(--billy-blue)}
+.stat .sl{font-size:12.5px;color:var(--gray-600)}
+.stat .sv{font-size:18px;font-weight:700;color:var(--gray-900);letter-spacing:-.3px}
+.stat .sv small{font-size:12px;color:var(--gray);font-weight:400;margin-left:5px}
+.statx{flex:0 0 auto;display:flex;align-items:center}
 tbody tr:hover{background:var(--billy-blue-50)}
 tbody tr:last-child td{border-bottom:none}
 .t-name{font-weight:500;color:var(--gray-900);white-space:nowrap}
@@ -558,12 +574,22 @@ function renderProof(){
 }
 /* ===================== 상태/필터/기간 ===================== */
 let current='dashboard',_sel=new Set(),_q='',_filterOpen=false;
+/* 페이지네이션 (토스식 20건 단위) */
+const PAGE_N=20;let _page=1;
+function setPage(n){_page=n;render();window.scrollTo({top:0});}
+function pagerHtml(total){
+  const pages=Math.ceil(total/PAGE_N)||1;if(pages<2)return '';
+  const p=_page;const win=[];for(let i=1;i<=pages;i++){if(i===1||i===pages||Math.abs(i-p)<=2)win.push(i);}
+  let arr=[],last=0;
+  win.forEach(i=>{if(i-last>1)arr.push('<span class="pgdot">…</span>');arr.push(`<button class="pg${i===p?' cur':''}" onclick="setPage(${i})">${i}</button>`);last=i;});
+  return `<div class="pager"><button class="pg nav" ${p<=1?'disabled':''} onclick="setPage(${p-1})">‹</button>${arr.join('')}<button class="pg nav" ${p>=pages?'disabled':''} onclick="setPage(${p+1})">›</button></div>`;
+}
 let _sort={payout:{k:'date',dir:-1},invoice:{k:'writeDate',dir:-1},vendors:{k:'cnt',dir:-1},expense:{k:'date',dir:-1},cardreport:{k:'date',dir:-1}};
 const SORTS={payout:[['date','요청일'],['name','거래처명'],['amount','금액'],['team','팀'],['status','상태'],['paid','지급일']],invoice:[['date','요청일'],['name','공급받는자'],['item','품목'],['writeDate','작성일'],['amount','합계'],['status','상태']],expense:[['date','사용일'],['name','사용처'],['amount','금액'],['team','팀'],['status','상태']],cardreport:[['date','사용일'],['name','사용처'],['amount','금액'],['holder','명의자'],['status','상태']]};
 const isExpPage=k=>(k==='expense'||k==='cardreport');
 let FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};
 let PERIOD='month',PFROM='',PTO=''; // month | ytd | all | custom (기본=이번달)
-function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};_q='';}
+function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};_q='';_page=1;}
 /* 컬럼 너비 조절(거래처/예금주 등 첫 열) — 드래그로 조절, localStorage 저장 */
 let COLW=(function(){try{return JSON.parse(localStorage.getItem('fin_colw')||'{}')}catch(e){return {}}})();
 function colwVar(key){return (COLW[key]||300)+'px';}
@@ -650,15 +676,15 @@ const FIN_LINKS=[
 const NAV_EMO={
   invoice:'<svg viewBox="0 0 24 24"><rect x="4" y="2.5" width="16" height="19" rx="3.5" fill="#03B26C"/><rect x="7.5" y="7" width="9" height="1.9" rx=".95" fill="#fff"/><rect x="7.5" y="11" width="9" height="1.9" rx=".95" fill="#fff"/><rect x="7.5" y="15" width="5.5" height="1.9" rx=".95" fill="#fff"/></svg>',
   payout:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="#00C471"/><text x="12" y="15.8" text-anchor="middle" font-size="11.5" font-weight="800" fill="#fff">w</text></svg>',
-  cardreport:'<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14.5" rx="3" fill="#3182F6"/><rect x="2.5" y="8.4" width="19" height="3.1" fill="#1B64DA"/><rect x="6" y="14.8" width="6" height="1.9" rx=".95" fill="#fff"/></svg>',
-  expense:'<svg viewBox="0 0 24 24"><g fill="#3182F6"><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45"/><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45" transform="rotate(60 12 12)"/><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45" transform="rotate(120 12 12)"/></g></svg>',
+  cardreport:'<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14.5" rx="3" fill="#03B26C"/><rect x="2.5" y="8.4" width="19" height="3.1" fill="#02925A"/><rect x="6" y="14.8" width="6" height="1.9" rx=".95" fill="#fff"/></svg>',
+  expense:'<svg viewBox="0 0 24 24"><g fill="#00C471"><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45"/><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45" transform="rotate(60 12 12)"/><rect x="10.55" y="2.8" width="2.9" height="18.4" rx="1.45" transform="rotate(120 12 12)"/></g></svg>',
   vendors:'<svg viewBox="0 0 24 24"><rect x="5" y="2.8" width="14" height="18.4" rx="2.8" fill="#03B26C"/><g fill="#fff"><rect x="8" y="6.3" width="3" height="3" rx=".9"/><rect x="13" y="6.3" width="3" height="3" rx=".9"/><rect x="8" y="11.2" width="3" height="3" rx=".9"/><rect x="13" y="11.2" width="3" height="3" rx=".9"/><rect x="10.4" y="16.4" width="3.2" height="4.8" rx=".9"/></g></svg>',
-  dashboard:'<svg viewBox="0 0 24 24"><rect x="4.5" y="2.5" width="15" height="19" rx="3.2" fill="#333D4B"/><rect x="7.2" y="5.2" width="9.6" height="4.2" rx="1.3" fill="#00C471"/><g fill="#fff"><circle cx="8.9" cy="12.9" r="1.25"/><circle cx="12" cy="12.9" r="1.25"/><circle cx="15.1" cy="12.9" r="1.25"/><circle cx="8.9" cy="16.6" r="1.25"/><circle cx="12" cy="16.6" r="1.25"/><circle cx="15.1" cy="16.6" r="1.25"/></g></svg>',
-  fuel:'<svg viewBox="0 0 24 24"><path d="M6.5 11l1.6-3.4A2.5 2.5 0 0 1 10.4 6h3.2a2.5 2.5 0 0 1 2.3 1.6L17.5 11z" fill="#FFB040"/><rect x="3" y="10.5" width="18" height="6.5" rx="2.5" fill="#FA9600"/><circle cx="7.5" cy="17.6" r="2.1" fill="#333D4B"/><circle cx="16.5" cy="17.6" r="2.1" fill="#333D4B"/><circle cx="7.5" cy="17.6" r=".9" fill="#fff"/><circle cx="16.5" cy="17.6" r=".9" fill="#fff"/><rect x="5.2" y="12.4" width="3.4" height="1.9" rx=".95" fill="#fff"/><rect x="15.4" y="12.4" width="3.4" height="1.9" rx=".95" fill="#fff"/></svg>',
-  coupon:'<svg viewBox="0 0 24 24"><rect x="2.8" y="6" width="18.4" height="12" rx="3" fill="#F04E98"/><g fill="#fff"><circle cx="12" cy="8.9" r=".95"/><circle cx="12" cy="12" r=".95"/><circle cx="12" cy="15.1" r=".95"/></g><circle cx="2.8" cy="12" r="1.9" fill="#fff"/><circle cx="21.2" cy="12" r="1.9" fill="#fff"/></svg>',
-  proof:'<svg viewBox="0 0 24 24"><rect x="4.2" y="2.8" width="14.6" height="18.4" rx="3" fill="#6B7684"/><rect x="7.5" y="6.8" width="8" height="1.8" rx=".9" fill="#fff"/><rect x="7.5" y="10.4" width="8" height="1.8" rx=".9" fill="#fff"/><circle cx="17" cy="16.8" r="4.7" fill="#FA9600"/><rect x="16.2" y="14.1" width="1.7" height="3.7" rx=".85" fill="#fff"/><circle cx="17.05" cy="19.3" r=".95" fill="#fff"/></svg>',
+  dashboard:'<svg viewBox="0 0 24 24"><rect x="4.5" y="2.5" width="15" height="19" rx="3.2" fill="#03B26C"/><rect x="7.2" y="5.2" width="9.6" height="4.2" rx="1.3" fill="#fff"/><g fill="#fff"><circle cx="8.9" cy="12.9" r="1.25"/><circle cx="12" cy="12.9" r="1.25"/><circle cx="15.1" cy="12.9" r="1.25"/><circle cx="8.9" cy="16.6" r="1.25"/><circle cx="12" cy="16.6" r="1.25"/><circle cx="15.1" cy="16.6" r="1.25"/></g></svg>',
+  fuel:'<svg viewBox="0 0 24 24"><path d="M6.5 11l1.6-3.4A2.5 2.5 0 0 1 10.4 6h3.2a2.5 2.5 0 0 1 2.3 1.6L17.5 11z" fill="#7AD8B0"/><rect x="3" y="10.5" width="18" height="6.5" rx="2.5" fill="#03B26C"/><circle cx="7.5" cy="17.6" r="2.1" fill="#333D4B"/><circle cx="16.5" cy="17.6" r="2.1" fill="#333D4B"/><circle cx="7.5" cy="17.6" r=".9" fill="#fff"/><circle cx="16.5" cy="17.6" r=".9" fill="#fff"/><rect x="5.2" y="12.4" width="3.4" height="1.9" rx=".95" fill="#fff"/><rect x="15.4" y="12.4" width="3.4" height="1.9" rx=".95" fill="#fff"/></svg>',
+  coupon:'<svg viewBox="0 0 24 24"><rect x="2.8" y="6" width="18.4" height="12" rx="3" fill="#00C471"/><g fill="#fff"><circle cx="12" cy="8.9" r=".95"/><circle cx="12" cy="12" r=".95"/><circle cx="12" cy="15.1" r=".95"/></g><circle cx="2.8" cy="12" r="1.9" fill="#fff"/><circle cx="21.2" cy="12" r="1.9" fill="#fff"/></svg>',
+  proof:'<svg viewBox="0 0 24 24"><rect x="4.2" y="2.8" width="14.6" height="18.4" rx="3" fill="#03B26C"/><rect x="7.5" y="6.8" width="8" height="1.8" rx=".9" fill="#fff"/><rect x="7.5" y="10.4" width="8" height="1.8" rx=".9" fill="#fff"/><circle cx="17" cy="16.8" r="4.7" fill="#FA9600"/><rect x="16.2" y="14.1" width="1.7" height="3.7" rx=".85" fill="#fff"/><circle cx="17.05" cy="19.3" r=".95" fill="#fff"/></svg>',
   anomaly:'<svg viewBox="0 0 24 24"><path d="M10.1 4.1a2.2 2.2 0 0 1 3.8 0l7 12.2a2.2 2.2 0 0 1-1.9 3.3H5a2.2 2.2 0 0 1-1.9-3.3z" fill="#FA9600"/><rect x="11.1" y="8.6" width="1.8" height="5.2" rx=".9" fill="#fff"/><circle cx="12" cy="16.2" r="1.05" fill="#fff"/></svg>',
-  banklink:'<svg viewBox="0 0 24 24"><path fill="#3182F6" fill-rule="evenodd" d="M6.2 8.6h5.2a3.4 3.4 0 1 1 0 6.8H6.2a3.4 3.4 0 1 1 0-6.8Zm.1 2.3a1.1 1.1 0 1 0 0 2.2h5a1.1 1.1 0 1 0 0-2.2Z"/><path fill="#00C471" fill-rule="evenodd" d="M12.6 8.6h5.2a3.4 3.4 0 1 1 0 6.8h-5.2a3.4 3.4 0 1 1 0-6.8Zm.1 2.3a1.1 1.1 0 1 0 0 2.2h5a1.1 1.1 0 1 0 0-2.2Z"/></svg>'};
+  banklink:'<svg viewBox="0 0 24 24"><path fill="#02925A" fill-rule="evenodd" d="M6.2 8.6h5.2a3.4 3.4 0 1 1 0 6.8H6.2a3.4 3.4 0 1 1 0-6.8Zm.1 2.3a1.1 1.1 0 1 0 0 2.2h5a1.1 1.1 0 1 0 0-2.2Z"/><path fill="#00C471" fill-rule="evenodd" d="M12.6 8.6h5.2a3.4 3.4 0 1 1 0 6.8h-5.2a3.4 3.4 0 1 1 0-6.8Zm.1 2.3a1.1 1.1 0 1 0 0 2.2h5a1.1 1.1 0 1 0 0-2.2Z"/></svg>'};
 function buildNav(){
   let h='';let mh='';let curGroup='';
   NAV.forEach(([k,label,ic,grp,mlabel])=>{
@@ -683,7 +709,7 @@ function buildNav(){
   document.getElementById('nav').innerHTML=h;
   const _mn=document.getElementById('mnav');if(_mn)_mn.innerHTML=mh;
 }
-function go(k){if((k==='expense'||k==='cardreport')&&IS_SUPA&&!EXPENSE_READY)k='dashboard';current=k;_sel=new Set();_q='';_filterOpen=false;clearFilter();render();}
+function go(k){if((k==='expense'||k==='cardreport')&&IS_SUPA&&!EXPENSE_READY)k='dashboard';current=k;_sel=new Set();_q='';_filterOpen=false;_page=1;clearFilter();render();}
 function landing(page,opts){clearFilter();opts=opts||{};if(opts.team)FILTER.teams.add(opts.team);if(opts.status)FILTER.statuses.add(opts.status);if(opts.big)FILTER.big=true;if(opts.anomaly)FILTER.anomaly=true;if(opts.payee)_q=opts.payee;current=page;_sel=new Set();_filterOpen=true;render();}
 function setRole(r){ROLE=r;_sel=new Set();clearFilter();if((current==='anomaly'||current==='proof'||current==='banklink')&&!canViewAll())current='dashboard';render();}
 function render(){
@@ -708,7 +734,7 @@ function onSearchCompStart(){_composing=true;clearTimeout(_searchT);}
 function onSearchCompEnd(el){_composing=false;_q=el.value;clearTimeout(_searchT);_searchT=setTimeout(_searchRender,150);}
 function _searchRender(){const cur=document.querySelector('.search input');const caret=(cur&&document.activeElement===cur)?cur.selectionStart:null;render();const inp=document.querySelector('.search input');if(inp){inp.focus();try{const p=(caret==null)?inp.value.length:caret;inp.setSelectionRange(p,p);}catch(e){}}}
 function onSearch(v){_q=v;_searchRender();}
-function setSort(page,k){const s=_sort[page];if(s.k===k)s.dir*=-1;else{s.k=k;s.dir=(k==='date'||k==='writeDate'||k==='paid'||k==='amount')?-1:1;}render();}
+function setSort(page,k){const s=_sort[page];if(s.k===k)s.dir*=-1;else{s.k=k;s.dir=(k==='date'||k==='writeDate'||k==='paid'||k==='amount')?-1:1;}_page=1;render();}
 function sortIcon(page,k){const s=_sort[page];return s.k===k?`<span class="ar">${s.dir>0?'▲':'▼'}</span>`:'';}
 function sortVal(r,page,k){const exp=isExpPage(page);if(k==='amount')return page==='invoice'?(r.total||0):(r.amount||0);if(k==='name')return (page==='invoice'?r.company:(exp?r.merchant:r.payee))||'';if(k==='holder')return r.cardHolder||'';if(k==='item')return r.itemName||'';if(k==='writeDate')return r.writeDate||'';if(k==='team')return normalizeTeam(r.team)||'';if(k==='status')return r.status||'';if(k==='paid')return r.paidAt||'';return (exp?r.spentDate:(r.appliedTs||r.applied))||'';}
 function applySort(list,page){const s=_sort[page];const isNum=(s.k==='amount');list.sort((a,b)=>{const av=sortVal(a,page,s.k),bv=sortVal(b,page,s.k);let r=isNum?(av-bv):String(av).localeCompare(String(bv),'ko');return r*s.dir||(b.id>a.id?1:-1);});return list;}
@@ -718,8 +744,20 @@ function toggleAll(page){const list=visible(page==='payout'?DB.payout:DB.invoice
 function setPeriod(p){PERIOD=p;render();}
 function periodSel(){return `<div class="seg"><button class="${PERIOD==='month'?'on':''}" onclick="setPeriod('month')">이번달</button><button class="${PERIOD==='ytd'?'on':''}" onclick="setPeriod('ytd')">올해</button><button class="${PERIOD==='all'?'on':''}" onclick="setPeriod('all')">전체</button><button class="${PERIOD==='custom'?'on':''}" onclick="setPeriod('custom')">기간지정</button></div>${PERIOD==='custom'?`<div class="seg-range"><input type="date" value="${PFROM}" onchange="PFROM=this.value;render()"><span>~</span><input type="date" value="${PTO}" onchange="PTO=this.value;render()"></div>`:''}`;}
 function fmtCur(list){const m={};list.forEach(r=>{if(r.unit&&r.unit!=='원')m[r.unit]=(m[r.unit]||0)+r.amount;});return Object.entries(m).map(([u,v])=>` · ${u} ${won(v)}`).join('');}
-function payoutSumBar(list){const krwSum=list.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);const pend=list.filter(r=>r.status==='requested');const pendKrw=pend.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);return `<div class="sumbar"><div class="sb-seg"><span>표시</span> <b>${list.length}건</b></div><div class="sb-seg"><span>원화 합계</span> <b>${won(krwSum)}원</b>${fmtCur(list)}</div><div class="sb-seg"><span>미지급</span> <b>${pend.length}건</b> · ${won(pendKrw)}원</div><button class="btn btn-sm btn-line sb-x" onclick="exportPayoutList()">${I.download}<span>엑셀</span></button></div>`;}
-function invoiceSumBar(list){const supply=list.reduce((s,r)=>s+r.supply,0),vat=list.reduce((s,r)=>s+r.tax,0),total=list.reduce((s,r)=>s+r.total,0);const pend=list.filter(r=>r.status==='requested').length;return `<div class="sumbar"><div class="sb-seg"><span>표시</span> <b>${list.length}건</b></div><div class="sb-seg"><span>공급가액</span> <b>${won(supply)}</b> · <span>세액</span> ${won(vat)} · <span>합계</span> <b>${won(total)}원</b></div><div class="sb-seg"><span>발행대기</span> <b>${pend}건</b></div><button class="btn btn-sm btn-line sb-x" onclick="exportInvoiceList()">${I.download}<span>엑셀</span></button></div>`;}
+function payoutSumBar(list){const krwSum=list.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);const pend=list.filter(r=>r.status==='requested');const pendKrw=pend.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);
+  return `<div class="statrow">
+    <div class="stat"><span class="sl">원화 합계 (표시 기준)</span><span class="sv">${won(krwSum)}원<small>${escH(fmtCur(list))}</small></span></div>
+    <div class="stat o"><span class="sl">미지급 대기</span><span class="sv">${won(pendKrw)}원<small>${pend.length}건</small></span></div>
+    <div class="stat b"><span class="sl">표시 건수</span><span class="sv">${list.length}건</span></div>
+    <div class="statx"><button class="btn btn-line" onclick="exportPayoutList()">${I.download}<span>엑셀 다운로드</span></button></div>
+  </div>`;}
+function invoiceSumBar(list){const supply=list.reduce((s,r)=>s+r.supply,0),vat=list.reduce((s,r)=>s+r.tax,0),total=list.reduce((s,r)=>s+r.total,0);const pend=list.filter(r=>r.status==='requested').length;
+  return `<div class="statrow">
+    <div class="stat"><span class="sl">공급가액</span><span class="sv">${won(supply)}원<small>세액 ${won(vat)}원</small></span></div>
+    <div class="stat b"><span class="sl">합계 금액</span><span class="sv">${won(total)}원<small>${list.length}건</small></span></div>
+    <div class="stat o"><span class="sl">발행대기</span><span class="sv">${pend}건</span></div>
+    <div class="statx"><button class="btn btn-line" onclick="exportInvoiceList()">${I.download}<span>엑셀 다운로드</span></button></div>
+  </div>`;}
 function todoBanner(){const pend=DB.payout.filter(r=>r.status==='requested');const pendKrw=pend.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);const now=new Date(today());const due=DB.invoice.filter(r=>{if(r.status!=='requested')return false;const dl=invoiceDeadline(r.writeDate);if(!dl)return false;return Math.round((dl-now)/86400000)<=3;});const overdue=due.filter(r=>(invoiceDeadline(r.writeDate)-now)<0).length;const proofOver=DB.payout.filter(r=>r.status==='paid'&&proofOverdue(r));const expPend=canApprove()?DB.expense.filter(r=>r.status==='requested'):[];const cardPend=expPend.filter(r=>r.method==='named_card').length;const genPend=expPend.length-cardPend;if(!pend.length&&!due.length&&!proofOver.length&&!expPend.length)return `<div class="todo ok">✅ 오늘 처리할 미지급·발행 항목이 없어요.</div>`;let it=[];if(pend.length)it.push(`<button class="todo-item" onclick="current='payout';clearFilter();FILTER.statuses=new Set(['requested']);render()"><b>${pend.length}건</b> 미지급 대기 · <span>${won(pendKrw)}원</span></button>`);if(due.length)it.push(`<button class="todo-item warn" onclick="current='invoice';clearFilter();_sort.invoice={k:'writeDate',dir:1};render()"><b>${due.length}건</b> 세금계산서 발행기한 임박${overdue?' (기한 지남 '+overdue+')':''}</button>`);if(proofOver.length)it.push(`<button class="todo-item warn" onclick="go('proof')"><b>${proofOver.length}건</b> 증빙 미수취 (발행기한 경과)</button>`);if(genPend)it.push(`<button class="todo-item" onclick="go('expense')"><b>${genPend}건</b> 지출결의 대기</button>`);if(cardPend)it.push(`<button class="todo-item" onclick="go('cardreport')"><b>${cardPend}건</b> 기명 법카 확인 대기</button>`);return`<div class="todo"><span class="todo-h">📌 오늘 할 일</span>${it.join('')}</div>`;}
 function renderDashboard(){
   const c=document.getElementById('content');
@@ -766,19 +804,26 @@ function renderPayout(){
   h+=payoutSumBar(list);
   if(mineApprove&&_sel.size){const ss=list.filter(r=>_sel.has(r.id));h+=`<div class="batchbar"><span class="sel">${_sel.size}건 선택 · ${won(ss.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0))}원</span><button class="btn btn-sm btn-primary" onclick="batchPayout('paid')">${I.check}<span>지급완료 표시</span></button><button class="btn btn-sm btn-secondary" onclick="_sel=new Set();render()">해제</button></div>`;}
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 이체 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
+  if((_page-1)*PAGE_N>=list.length)_page=1;
+  const pageList=list.slice((_page-1)*PAGE_N,_page*PAGE_N);
+  const rowStart=(_page-1)*PAGE_N;
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-payout"><thead><tr>';
+  h+=`<th class="mhide" style="width:42px">#</th>`;
   if(mineApprove)h+=`<th class="mhide" style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('payout')"></th>`;
-  h+=`<th class="sortable mhide" onclick="setSort('payout','date')">요청일${sortIcon('payout','date')}</th><th class="mhide">신청인</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('payout','name')">거래처 · 적요${sortIcon('payout','name')}</th><th class="mhide">분류</th><th class="mhide">은행·계좌</th><th class="sortable" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
-  list.forEach(r=>{
+  h+=`<th class="sortable mhide" onclick="setSort('payout','date')">요청일${sortIcon('payout','date')}</th><th class="mhide">신청인</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('payout','name')">거래처${sortIcon('payout','name')}</th><th class="mhide">적요</th><th class="mhide">분류</th><th class="mhide">은행</th><th class="mhide">계좌번호</th><th class="sortable" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
+  pageList.forEach((r,_i)=>{
     const st=PSTATUS[r.status]||['?',''];const flags=r.status==='requested'?scanPayout(r):[];
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
+    h+=`<td class="mhide rowno">${rowStart+_i+1}</td>`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
-    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.applied||'-')}${r.appliedTs?`<div style="font-size:12px;color:var(--gray-400)">${escH(r.appliedTs.slice(11))}</div>`:''}</td>`;
+    h+=`<td class="num mhide" style="white-space:nowrap;font-size:12px">${escH(r.applied||'-')}${r.appliedTs?`<span style="color:var(--gray-400)"> ${escH(r.appliedTs.slice(11))}</span>`:''}</td>`;
     h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
     h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td>`;
-    h+=`<td style="text-align:left"><div class="t-name">${escH(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</div><div class="t-sub">${escH(r.purpose||'-')}</div></td>`;
+    h+=`<td style="text-align:left;white-space:nowrap"><span class="t-name">${escH(r.payee)}</span> ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</td>`;
+    h+=`<td class="mhide" style="text-align:left;white-space:nowrap" title="${escH(r.purpose||'')}">${escH(r.purpose||'-')}</td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.category||'-')}</span></td>`;
-    h+=`<td class="mhide" style="text-align:left">${escH(r.bank||'-')}<div class="t-sub num">${escH(r.account||'')}</div></td>`;
+    h+=`<td class="mhide" style="white-space:nowrap">${escH(r.bank||'-')}</td>`;
+    h+=`<td class="mhide num">${escH(r.account||'-')}</td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span>${r.unit!=='원'?' <span class="t-sub">'+r.unit+'</span>':''}</td>`;
     h+=`<td class="mhide" style="max-width:175px;white-space:normal">${flags.length?`<span class="flagwrap" onclick="event.stopPropagation();anomalyDetail('${r.id}')" title="클릭하면 감지 근거 보기">${flags.map(flagHtml).join('')}</span>`:''}${isBig(r)?(flags.length?' ':'')+'<span class="tag tag-blue">🔺 고액</span>':(flags.length?'':'<span class="t-sub">–</span>')}</td>`;
     h+=`<td class="mhide">${r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--billy-blue);text-decoration:underline;font-size:12px;white-space:nowrap">📎 링크 ↗</a>`:'<span class="t-sub">–</span>'}</td>`;
@@ -789,7 +834,7 @@ function renderPayout(){
     if(canDeletePayout(r))h+=`<button class="iconbtn" title="삭제 (본인 작성 건)" onclick="event.stopPropagation();deletePayout('${r.id}')">${I.trash}</button>`;
     h+='</div></td></tr>';
   });
-  h+='</tbody></table></div></div>';
+  h+='</tbody></table></div></div>'+pagerHtml(list.length);
   c.innerHTML=h;
   initColResize('payout');
 }
@@ -1397,18 +1442,25 @@ function renderInvoice(){
   h+=invoiceSumBar(list);
   if(mineApprove&&_sel.size)h+=`<div class="batchbar"><span class="sel">${_sel.size}건 선택</span><button class="btn btn-sm btn-line" onclick="batchInvoice('issued')">${I.check}<span>발행완료 표시</span></button>${canDeposit()?`<button class="btn btn-sm btn-line" onclick="batchDeposit()">${I.check}<span>입금확인 표시</span></button>`:''}<button class="btn btn-sm btn-primary" onclick="exportInvoice()">${I.download}<span>홈택스 발행 엑셀</span></button><button class="btn btn-sm btn-secondary" onclick="_sel=new Set();render()">해제</button></div>`;
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 발행 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
+  if((_page-1)*PAGE_N>=list.length)_page=1;
+  const ipageList=list.slice((_page-1)*PAGE_N,_page*PAGE_N);
+  const irowStart=(_page-1)*PAGE_N;
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-invoice"><thead><tr>';
+  h+=`<th class="mhide" style="width:42px">#</th>`;
   if(mineApprove)h+=`<th style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('invoice')"></th>`;
-  h+=`<th class="sortable" onclick="setSort('invoice','date')">요청일${sortIcon('invoice','date')}</th><th class="mhide">요청자</th><th class="sortable" onclick="setSort('invoice','name')">상호${sortIcon('invoice','name')}</th><th class="mhide">이메일</th><th class="sortable mhide" onclick="setSort('invoice','writeDate')">작성일${sortIcon('invoice','writeDate')}</th><th>품목명</th><th class="mhide">유형</th><th class="mhide">공급가액</th><th class="mhide">부가세액</th><th class="sortable" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide">실제입금액</th><th class="mhide">내용</th><th class="mhide">발급일</th><th>상태</th><th>입금확인</th><th></th></tr></thead><tbody>`;
-  list.forEach(r=>{const st=ISTATUS[r.status];
+  h+=`<th class="sortable" onclick="setSort('invoice','date')">요청일${sortIcon('invoice','date')}</th><th class="mhide">요청자</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('invoice','name')">상호${sortIcon('invoice','name')}</th><th class="mhide">사업자번호</th><th class="mhide">이메일</th><th class="sortable mhide" onclick="setSort('invoice','writeDate')">작성일${sortIcon('invoice','writeDate')}</th><th>품목명</th><th class="mhide">유형</th><th class="mhide">공급가액</th><th class="mhide">부가세액</th><th class="sortable" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide">실제입금액</th><th class="mhide">내용</th><th class="mhide">발급일</th><th>상태</th><th>입금확인</th><th></th></tr></thead><tbody>`;
+  ipageList.forEach((r,_i)=>{const st=ISTATUS[r.status];
     h+=`<tr class="rowclk" onclick="viewInvoice('${r.id}')">`;
+    h+=`<td class="mhide rowno">${irowStart+_i+1}</td>`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
-    h+=`<td class="t-sub num" style="white-space:nowrap">${escH(r.applied||'-')}</td>`;
-    h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}<div class="t-sub">${escH(normalizeTeam(r.team)||'')}</div></td>`;
-    h+=`<td style="text-align:left"><div class="t-name">${escH(r.company)}</div><div class="t-sub num">${escH(r.bizNo)}</div></td>`;
-    h+=`<td class="mhide" style="font-size:12px;word-break:break-all;text-align:left">${escH(r.email||'-')}</td>`;
-    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.writeDate||'-')}</td>`;
-    h+=`<td style="text-align:left"><div class="ellip">${escH(r.itemName)}</div></td>`;
+    h+=`<td class="num" style="white-space:nowrap;font-size:12px">${escH(r.applied||'-')}</td>`;
+    h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
+    h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td>`;
+    h+=`<td style="text-align:left;white-space:nowrap"><span class="t-name">${escH(r.company)}</span></td>`;
+    h+=`<td class="mhide num">${escH(r.bizNo||'-')}</td>`;
+    h+=`<td class="mhide" style="font-size:12px;text-align:left;white-space:nowrap">${escH(r.email||'-')}</td>`;
+    h+=`<td class="num mhide" style="white-space:nowrap;font-size:12px">${escH(r.writeDate||'-')}</td>`;
+    h+=`<td style="text-align:left;white-space:nowrap" title="${escH(r.itemName||'')}">${escH(r.itemName)}</td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.saleType||'매출')}</span></td>`;
     h+=`<td class="mhide num" style="text-align:right">${won(r.supply)}</td>`;
     h+=`<td class="mhide num" style="text-align:right">${won(r.tax)}</td>`;
@@ -1421,14 +1473,14 @@ function renderInvoice(){
     h+=`<td>${dd.d?(canDeposit()?`<button class="depbtn depon" onclick="event.stopPropagation();openDepositForm('${r.id}')" title="클릭해서 수정/취소">✔ ${escH(dd.d)}</button>`:`<span class="badge badge-deposit">✔ ${escH(dd.d)}</span>`):(r.status==='issued'?(canDeposit()?`<button class="depbtn" onclick="event.stopPropagation();openDepositForm('${r.id}')">☐ 미확인</button>`:'<span class="t-sub">미확인</span>'):'<span class="t-sub">–</span>')}</td>`;
     h+=`<td><div class="rowact"><button class="iconbtn" title="홈택스 발행 엑셀" onclick="event.stopPropagation();exportInvoiceOne('${r.id}')">${I.download}</button><button class="iconbtn" title="복제" onclick="event.stopPropagation();cloneInvoice('${r.id}')">${I.copy}</button>${canEditInvoice(r)?`<button class="iconbtn" title="수정" onclick="event.stopPropagation();editInvoice('${r.id}')">✏️</button>`:''}${canDeleteInvoice(r)?`<button class="iconbtn" title="삭제" onclick="event.stopPropagation();deleteInvoice('${r.id}')">${I.trash}</button>`:''}</div></td></tr>`;
   });
-  h+='</tbody></table></div></div>';
+  h+='</tbody></table></div></div>'+pagerHtml(list.length);
   c.innerHTML=h;
   initColResize('invoice');
 }
 /* 표 열 너비 드래그 조절 (공용) — localStorage 저장, 열 제목 기준 */
 const COLW_DEF={
-  invoice:{'요청일':86,'요청자':74,'상호':170,'이메일':160,'작성일':86,'품목명':210,'유형':56,'공급가액':96,'부가세액':90,'합계':104,'실제입금액':98,'내용':140,'발급일':86,'상태':94,'입금확인':110},
-  payout:{'거래처·적요':280,'팀':70,'신청인':80,'분류':105,'요청일':100,'은행·계좌':160,'금액':115,'이상·고액':110,'증빙/비고':90,'상태':115}
+  invoice:{'요청일':92,'요청자':70,'팀':64,'상호':160,'사업자번호':104,'이메일':170,'작성일':92,'품목명':200,'유형':54,'공급가액':94,'부가세액':88,'합계':100,'실제입금액':96,'내용':130,'발급일':88,'상태':92,'입금확인':106},
+  payout:{'요청일':138,'신청인':70,'팀':62,'거래처':150,'적요':230,'분류':96,'은행':86,'계좌번호':128,'금액':100,'이상·고액':96,'증빙/비고':82,'상태':100}
 };
 function initColResize(key){
   const tbl=document.querySelector('#content table.rsz-'+key);if(!tbl||tbl._rszDone)return;tbl._rszDone=true;
