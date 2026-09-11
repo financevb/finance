@@ -802,7 +802,7 @@ function renderPayout(){
   const pend=list.filter(r=>r.status==='requested');
   let h=filterBar('payout');
   h+=payoutSumBar(list);
-  if(mineApprove&&_sel.size){const ss=list.filter(r=>_sel.has(r.id));h+=`<div class="batchbar"><span class="sel">${_sel.size}건 선택 · ${won(ss.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0))}원</span><button class="btn btn-sm btn-primary" onclick="batchPayout('paid')">${I.check}<span>지급완료 표시</span></button><button class="btn btn-sm btn-secondary" onclick="_sel=new Set();render()">해제</button></div>`;}
+  if(mineApprove&&_sel.size){const ss=list.filter(r=>_sel.has(r.id));h+=`<div class="batchbar"><span class="sel">${_sel.size}건 선택 · ${won(ss.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0))}원</span><button class="btn btn-sm btn-primary" onclick="batchPayout('paid')">${I.check}<span>지급완료 표시</span></button>${canManageAll()?`<button class="btn btn-sm btn-danger" onclick="batchDeletePayout()">${I.trash}<span>선택 삭제</span></button>`:''}<button class="btn btn-sm btn-secondary" onclick="_sel=new Set();render()">해제</button></div>`;}
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 이체 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
   if((_page-1)*PAGE_N>=list.length)_page=1;
   const pageList=list.slice((_page-1)*PAGE_N,_page*PAGE_N);
@@ -977,7 +977,16 @@ function submitFuel(){
 }
 function clonePayout(id){const r=DB.payout.find(x=>x.id===id);if(!r)return;openPayoutForm({payee:r.payee,bank:r.bank,account:r.account,amount:r.amount,unit:r.unit,category:r.category,purpose:r.purpose,proofType:r.proofType});toast('과거 요청을 복제했어요.','ok');}
 function canEditPayout(r){return r&&r.status==='requested'&&!r.fuel&&r.category!=='유류비'&&!r.wh&&(r.requester===ME().name||canManageAll());}
-function canDeletePayout(r){return r&&r.status!=='paid'&&(r.requester===ME().name||canManageAll());} /* 본인 작성 건 + 정채영은 전체, 지급완료는 삭제 불가 */
+function canDeletePayout(r){return r&&((r.requester===ME().name&&r.status!=='paid')||canManageAll());} /* 작성자: 본인 건(지급완료 전) / 정채영: 전체 */
+function batchDeletePayout(){
+  if(!canManageAll()){toast('선택 삭제는 정채영님만 할 수 있어요.','err');return;}
+  const ss=DB.payout.filter(r=>_sel.has(r.id)&&r.status!=='canceled');
+  if(!ss.length){toast('선택된 항목이 없어요.','err');return;}
+  confirmModal('🗑 선택 삭제',`선택한 <b>${ss.length}건</b>을 목록에서 삭제할까요?`,async()=>{
+    if(IS_SUPA){let ok=0;for(const r of ss){const {error}=await sb.rpc('fin_set_payout_status',{p_id:r.id,p_status:'canceled'});if(!error)ok++;}await loadData();_sel=new Set();closeModal();render();toast(ok+'건 삭제했어요.','ok');}
+    else{ss.forEach(r=>r.status='canceled');_sel=new Set();closeModal();render();toast(ss.length+'건 삭제했어요.','ok');}
+  });
+}
 function deletePayout(id){
   const r=DB.payout.find(x=>x.id===id);if(!canDeletePayout(r))return;
   /* 서버의 취소 기능을 이용 — 취소 건은 목록에서 기본 숨김이라 화면상 삭제와 동일. 관리자는 상태변경 RPC로 타인 건도 처리 */
@@ -1440,7 +1449,7 @@ function renderInvoice(){
   const mineApprove=canApprove();const pend=list.filter(r=>r.status==='requested');
   let h=filterBar('invoice');
   h+=invoiceSumBar(list);
-  if(mineApprove&&_sel.size)h+=`<div class="batchbar"><span class="sel">${_sel.size}건 선택</span><button class="btn btn-sm btn-line" onclick="batchInvoice('issued')">${I.check}<span>발행완료 표시</span></button>${canDeposit()?`<button class="btn btn-sm btn-line" onclick="batchDeposit()">${I.check}<span>입금확인 표시</span></button>`:''}<button class="btn btn-sm btn-primary" onclick="exportInvoice()">${I.download}<span>홈택스 발행 엑셀</span></button><button class="btn btn-sm btn-secondary" onclick="_sel=new Set();render()">해제</button></div>`;
+  if(mineApprove&&_sel.size)h+=`<div class="batchbar"><span class="sel">${_sel.size}건 선택</span><button class="btn btn-sm btn-line" onclick="batchInvoice('issued')">${I.check}<span>발행완료 표시</span></button>${canDeposit()?`<button class="btn btn-sm btn-line" onclick="batchDeposit()">${I.check}<span>입금확인 표시</span></button>`:''}<button class="btn btn-sm btn-primary" onclick="exportInvoice()">${I.download}<span>홈택스 발행 엑셀</span></button>${canManageAll()?`<button class="btn btn-sm btn-danger" onclick="batchDeleteInvoice()">${I.trash}<span>선택 삭제</span></button>`:''}<button class="btn btn-sm btn-secondary" onclick="_sel=new Set();render()">해제</button></div>`;
   if(!list.length){h+=`<div class="card"><div class="empty">${I.empty}<div>표시할 발행 요청이 없습니다.</div></div></div>`;c.innerHTML=h;return;}
   if((_page-1)*PAGE_N>=list.length)_page=1;
   const ipageList=list.slice((_page-1)*PAGE_N,_page*PAGE_N);
@@ -1559,7 +1568,16 @@ function submitInvoice(){const supply=numVal('i_supply');const r={id:uid('v'),re
 }
 let _invSubmitting=false,_editInvoiceId=null;
 function canEditInvoice(r){return r&&r.status==='requested'&&(r.requester===ME().name||canManageAll());} /* 작성자 본인 + 정채영, 발행완료 후 수정 불가 */
-function canDeleteInvoice(r){return r&&r.status!=='issued'&&(r.requester===ME().name||canManageAll());} /* 발행완료는 삭제 불가 */
+function canDeleteInvoice(r){return r&&((r.requester===ME().name&&r.status!=='issued')||canManageAll());} /* 작성자: 본인 건(발행완료 전) / 정채영: 전체 */
+function batchDeleteInvoice(){
+  if(!canManageAll()){toast('선택 삭제는 정채영님만 할 수 있어요.','err');return;}
+  const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!(r.status==='rejected'&&/^(삭제됨|수정으로 재등록)$/.test(r.rejectReason||'')));
+  if(!ss.length){toast('선택된 항목이 없어요.','err');return;}
+  confirmModal('🗑 선택 삭제',`선택한 <b>${ss.length}건</b>을 목록에서 삭제할까요?`,async()=>{
+    if(IS_SUPA){let ok=0;for(const r of ss){const {error}=await sb.rpc('fin_decide_invoice',{p_id:r.id,p_status:'rejected',p_reason:'삭제됨'});if(!error)ok++;}await loadData();_sel=new Set();closeModal();render();toast(ok+'건 삭제했어요.','ok');}
+    else{ss.forEach(r=>{r.status='rejected';r.rejectReason='삭제됨';});_sel=new Set();closeModal();render();toast(ss.length+'건 삭제했어요.','ok');}
+  });
+}
 function deleteInvoice(id){
   const r=DB.invoice.find(x=>x.id===id);if(!canDeleteInvoice(r))return;
   /* 서버가 취소 상태를 지원하지 않아 반려(사유: 삭제됨)로 처리하고 목록에서 숨김 */
