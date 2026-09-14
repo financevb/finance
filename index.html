@@ -744,10 +744,16 @@ function toggleAll(page){const list=visible(page==='payout'?DB.payout:DB.invoice
 function setPeriod(p){PERIOD=p;render();}
 function periodSel(){return `<div class="seg"><button class="${PERIOD==='month'?'on':''}" onclick="setPeriod('month')">이번달</button><button class="${PERIOD==='ytd'?'on':''}" onclick="setPeriod('ytd')">올해</button><button class="${PERIOD==='all'?'on':''}" onclick="setPeriod('all')">전체</button><button class="${PERIOD==='custom'?'on':''}" onclick="setPeriod('custom')">기간지정</button></div>${PERIOD==='custom'?`<div class="seg-range"><input type="date" value="${PFROM}" onchange="PFROM=this.value;render()"><span>~</span><input type="date" value="${PTO}" onchange="PTO=this.value;render()"></div>`:''}`;}
 function fmtCur(list){const m={};list.forEach(r=>{if(r.unit&&r.unit!=='원')m[r.unit]=(m[r.unit]||0)+r.amount;});return Object.entries(m).map(([u,v])=>` · ${u} ${won(v)}`).join('');}
-function payoutSumBar(list){const krwSum=list.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);const pend=list.filter(r=>r.status==='requested');const pendKrw=pend.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);
+function payoutSumBar(list){
+  /* 당월 합계 — 표시 기간과 무관하게 이번 달 기준, 매월 1일 자동 갱신 */
+  const ym=today().slice(0,7);const mon=parseInt(ym.slice(5,7),10);
+  const monthRows=DB.payout.filter(r=>r.unit==='원'&&(r.applied||'').slice(0,7)===ym&&r.status!=='canceled'&&r.status!=='rejected');
+  const monthSum=monthRows.reduce((s,r)=>s+r.amount,0);
+  const pendAll=DB.payout.filter(r=>r.status==='requested');
+  const pendKrw=pendAll.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);
   return `<div class="statrow">
-    <div class="stat"><span class="sl">원화 합계 (표시 기준)</span><span class="sv">${won(krwSum)}원<small>${escH(fmtCur(list))}</small></span></div>
-    <div class="stat o"><span class="sl">미지급 대기</span><span class="sv">${won(pendKrw)}원<small>${pend.length}건</small></span></div>
+    <div class="stat"><span class="sl">${mon}월 이체 합계 (당월)</span><span class="sv">${won(monthSum)}원<small>${monthRows.length}건</small></span></div>
+    <div class="stat o"><span class="sl">미지급 대기 (전체)</span><span class="sv">${won(pendKrw)}원<small>${pendAll.length}건</small></span></div>
     <div class="stat b"><span class="sl">표시 건수</span><span class="sv">${list.length}건</span></div>
     <div class="statx"><button class="btn btn-line" onclick="exportPayoutList()">${I.download}<span>엑셀 다운로드</span></button></div>
   </div>`;}
@@ -1049,7 +1055,21 @@ function memoHtml(r){
 function addMemo(id){const el=document.getElementById('memo_in_'+id);const body=el?el.value.trim():'';if(!body){toast('메모 내용을 입력해 주세요.','err');return;}
   sv('fin_add_memo',{p_payout_id:id,p_body:body},()=>{(MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body:body,at:today()+' '+new Date().toTimeString().slice(0,5)});}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(id);toast('메모를 추가했어요.','ok');});}
 function delMemo(mid,pid){sv('fin_del_memo',{p_id:mid},()=>{MEMOS[pid]=(MEMOS[pid]||[]).filter(m=>m.id!==mid);}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(pid);toast('메모를 삭제했어요.');});}
-function decidePayout(id,status){if(status==='rejected'&&!canReject()){toast('반려는 정채영님만 할 수 있어요.','err');return;}sv('fin_decide_payout',{p_id:id,p_status:status,p_reason:''},()=>{const r=DB.payout.find(x=>x.id===id);if(r){r.status=status;if(status==='paid')r.paidAt=today();}}).then(()=>{closeModal();render();toast(status==='paid'?'지급완료로 표시했어요.':'반려했어요.',status==='rejected'?'err':'ok');});}
+/* 지급완료 처리 시각·처리자 자동 기록 (관리자 메모로 서버 저장) */
+function _paidStamp(id){
+  const body='🕒 지급완료 처리 · '+fmtTs(new Date().toISOString())+' · '+ME().name;
+  if(IS_SUPA)return sb.rpc('fin_add_memo',{p_payout_id:id,p_body:body});
+  (MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body,at:fmtTs(new Date().toISOString()).slice(0,16)});
+  return Promise.resolve();
+}
+function decidePayout(id,status){
+  if(status==='rejected'&&!canReject()){toast('반려는 정채영님만 할 수 있어요.','err');return;}
+  const done=()=>{closeModal();render();toast(status==='paid'?'지급완료로 표시했어요. (처리시각 기록)':'반려했어요.',status==='rejected'?'err':'ok');};
+  if(!IS_SUPA){const r=DB.payout.find(x=>x.id===id);if(r){r.status=status;if(status==='paid'){r.paidAt=today();_paidStamp(id);}}done();return;}
+  sb.rpc('fin_decide_payout',{p_id:id,p_status:status,p_reason:''})
+    .then(({error})=>{if(error){toast(error.message||'오류가 났어요','err');throw error;}return status==='paid'?_paidStamp(id):null;})
+    .then(()=>loadData()).then(done).catch(()=>{});
+}
 /* 상태 인라인 변경 — 상태 배지 클릭 → 옵션 선택(재무만, 자유 전환) */
 function closeStatusMenu(){['statusMenu','statusBackdrop'].forEach(i=>{const e=document.getElementById(i);if(e)e.remove();});}
 function openStatusMenu(id,ev){
@@ -1068,9 +1088,13 @@ function setPayoutStatus(id,status){
   closeStatusMenu();
   if(status==='rejected'&&!canReject()){toast('반려는 정채영님만 할 수 있어요.','err');return;}
   const r=DB.payout.find(x=>x.id===id);if(!r||r.status===status)return;
-  sv('fin_set_payout_status',{p_id:id,p_status:status},()=>{r.status=status;r.paidAt=status==='paid'?(r.paidAt||today()):'';}).then(()=>{render();toast('상태를 '+PSTATUS[status][0]+'(으)로 바꿨어요.','ok');});
+  const done=()=>{render();toast('상태를 '+PSTATUS[status][0]+'(으)로 바꿨어요.','ok');};
+  if(!IS_SUPA){r.status=status;r.paidAt=status==='paid'?(r.paidAt||today()):'';if(status==='paid')_paidStamp(id);done();return;}
+  sb.rpc('fin_set_payout_status',{p_id:id,p_status:status})
+    .then(({error})=>{if(error){toast(error.message||'오류가 났어요','err');throw error;}return status==='paid'?_paidStamp(id):null;})
+    .then(()=>loadData()).then(done).catch(()=>{});
 }
-function batchPayout(status){const ss=DB.payout.filter(r=>_sel.has(r.id)&&r.status==='requested');if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_payout',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리.','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='paid';r.paidAt=today();});_sel=new Set();render();toast(ss.length+'건 지급완료 표시.','ok');}}
+function batchPayout(status){const ss=DB.payout.filter(r=>_sel.has(r.id)&&r.status==='requested');if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_payout',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>status==='paid'?Promise.all(ss.map(r=>_paidStamp(r.id))):null).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리. (처리시각 기록)','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='paid';r.paidAt=today();_paidStamp(r.id);});_sel=new Set();render();toast(ss.length+'건 지급완료 표시.','ok');}}
 function exportPayoutRows(ss,fname){loadXLSX().then(function(){const head=['입금은행','입금계좌번호','예금주','이체금액','통화','적요(통장표시)','분류'];const data=ss.map(r=>[r.bank,r.account,r.payee,r.amount,r.unit,(r.purpose||'').slice(0,7),r.category]);const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:10},{wch:20},{wch:18},{wch:13},{wch:7},{wch:14},{wch:12}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'이체요청');XLSX.writeFile(wb,fname);toast(ss.length+'건 엑셀 다운로드.','ok');}).catch(()=>toast('엑셀 로드 실패','err'));}
 function exportPayout(){const ss=DB.payout.filter(r=>_sel.has(r.id));if(!ss.length){toast('항목을 선택하세요.','err');return;}exportPayoutRows(ss,'이체요청_선택_'+today()+'.xlsx');}
 function exportPayoutList(){const ss=applySort(visible(DB.payout,'payout').filter(r=>r.category!=='유류비'),'payout');if(!ss.length){toast('내보낼 항목이 없어요.','err');return;}exportPayoutRows(ss,'이체요청_'+today()+'.xlsx');}
