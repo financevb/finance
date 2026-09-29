@@ -893,7 +893,7 @@ function openPayoutForm(seed){
   const cur=CURRENCIES.map(x=>`<option ${seed.unit===x?'selected':''}>${x}</option>`).join('');
   modal(seed.editId?'이체 요청 수정':'새 이체 요청','wide',POLICY_HTML+`
     <div class="t-sub" style="margin:0 0 12px">신청인: <b>${escH(ME().name)}</b>${ME().team?' · '+escH(normalizeTeam(ME().team)):''} <span style="color:var(--gray)">(요청 시 자동 기록)</span></div>
-    <div class="form-row"><label>거래처/예금주 <span class="req">*</span><span class="hint">검색 후 선택 시 계좌 자동입력</span></label><div class="payeewrap"><input class="input" id="f_payee" value="${escH(seed.payee||'')}" placeholder="거래처명" autocomplete="off" oninput="onPayeeInput()"><button type="button" class="plbtn" tabindex="-1" onclick="togglePayeeList()">▾</button><div class="plist" id="payeeList"></div></div></div>
+    <div class="form-row"><label>거래처/예금주 <span class="req">*</span><span class="hint">기존 거래처는 선택하면 최근 계좌 자동입력 · 신규는 이름을 그대로 입력</span></label><div class="payeewrap"><input class="input" id="f_payee" value="${escH(seed.payee||'')}" placeholder="거래처명" autocomplete="off" oninput="onPayeeInput()"><button type="button" class="plbtn" tabindex="-1" onclick="togglePayeeList()">▾</button><div class="plist" id="payeeList"></div></div></div>
     <div class="form-row"><label>사업자등록번호<span class="hint">신규 여부 확인용 · 개인은 비워두세요 (- 상관없음)</span></label><input class="input num" id="f_bizno" value="${escH(seed.bizNo||'')}" placeholder="10자리" oninput="dupHint()"></div>
     <div class="f2"><div class="form-row"><label>은행 <span class="req">*</span></label><select class="input" id="f_bank">${banks}</select></div><div class="form-row"><label>계좌번호 <span class="req">*</span></label><input class="input num" id="f_account" value="${escH(seed.account||'')}" placeholder="- 없이 숫자" oninput="dupHint()"></div></div>
     <div class="f2"><div class="form-row"><label>금액 <span class="req">*</span></label><input class="input num" id="f_amount" value="${seed.amount?won(seed.amount):''}" placeholder="0" oninput="this.value=comma(this.value);dupHint()"></div><div class="form-row"><label>통화</label><select class="input" id="f_unit">${cur}</select></div></div>
@@ -931,16 +931,23 @@ function renderPayeeList(filter){
   const norm=s=>String(s||'').replace(/\(주\)|주식회사|\s|㈜/g,'').toLowerCase();
   const k=norm(filter);
   const items=VENDORS.map((v,i)=>({v,i})).filter(x=>!k||norm(x.v.name).includes(k));
-  box.innerHTML=items.length?items.map(({v,i})=>{const pa=(v.accounts||[]).find(a=>a.primary)||(v.accounts||[])[0];return `<div class="pli" onmousedown="event.preventDefault();pickPayeeIdx(${i})"><b>${escH(v.name)}</b><span class="psub">${pa?escH(normBank(pa.bank))+' '+escH(pa.account):'등록 계좌 없음'}</span></div>`;}).join(''):'<div class="pli pnone">일치하는 거래처가 없어요</div>';
+  box.innerHTML=items.length?items.map(({v,i})=>{const ra=recentAccountFor(v.name);const pa=ra||(v.accounts||[]).find(a=>a.primary)||(v.accounts||[])[0];return `<div class="pli" onmousedown="event.preventDefault();pickPayeeIdx(${i})"><b>${escH(v.name)}</b><span class="psub">${pa?escH(normBank(pa.bank))+' '+escH(pa.account):'등록 계좌 없음'}</span></div>`;}).join(''):'<div class="pli pnone">등록된 거래처가 없어요 — 신규 거래처면 <b>그대로 입력</b>하고 은행·계좌를 적어주세요</div>';
 }
 function pickPayeeIdx(i){const v=VENDORS[i];if(!v)return;document.getElementById('f_payee').value=v.name;showPayeeList(false);onPayeePick();}
 document.addEventListener('mousedown',e=>{const box=document.getElementById('payeeList');if(box&&box.style.display==='block'&&!e.target.closest('.payeewrap'))showPayeeList(false);});
 let _editPayoutId=null; /* 수정 모드: 저장 시 새 건 등록 후 이 id를 취소 처리 */
 let _payeeAuto=null; /* 마지막 자동입력 값 — 직접 입력한 값과 구분해서, 거래처 변경 시 자동입력 잔존값만 비운다 */
+/* 이체 이력에서 그 거래처로 가장 최근에 쓴 계좌를 찾음 (DB.payout은 최신순) */
+function recentAccountFor(name){
+  const norm=s=>String(s||'').replace(/\(주\)|주식회사|\s|㈜/g,'').toLowerCase();
+  const k=norm(name);if(!k)return null;
+  const r=DB.payout.find(x=>x.account&&x.status!=='canceled'&&x.status!=='rejected'&&norm(x.payee)===k);
+  return r?{bank:r.bank,account:r.account,primary:false}:null;
+}
 function onPayeePick(){
   const bankEl=document.getElementById('f_bank'),accEl=document.getElementById('f_account'),bz=document.getElementById('f_bizno');
   const v=findVendor(val('f_payee'));
-  const pa=v?(v.accounts.find(a=>a.primary)||v.accounts[0]):null;
+  const pa=v?(recentAccountFor(v.name)||v.accounts.find(a=>a.primary)||v.accounts[0]):null;
   if(v&&pa){
     const nb=normBank(pa.bank);
     bankEl.value=nb;accEl.value=pa.account;
