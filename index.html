@@ -590,6 +590,7 @@ const isExpPage=k=>(k==='expense'||k==='cardreport');
 let FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};
 let PERIOD='month',PFROM='',PTO=''; // month | ytd | all | custom (기본=이번달)
 let PYM=''; // 선택한 연-월 (YYYY-MM) — 비어있으면 이번달
+let PYR=''; // 년도 탭에서 선택한 연도 (YYYY) — 비어있으면 올해
 function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};_q='';_page=1;}
 /* 컬럼 너비 조절(거래처/예금주 등 첫 열) — 드래그로 조절, localStorage 저장 */
 let COLW=(function(){try{return JSON.parse(localStorage.getItem('fin_colw')||'{}')}catch(e){return {}}})();
@@ -599,7 +600,7 @@ function colwVar(key){return (COLW[key]||300)+'px';}
   document.addEventListener('mousemove',function(e){if(!d)return;var w=Math.max(110,Math.min(680,d.w0+(e.clientX-d.x0)));d.tbl.style.setProperty('--cw',w+'px');COLW[d.key]=w;});
   document.addEventListener('mouseup',function(){if(!d)return;var el=document.querySelector('.rzh.drag');if(el)el.classList.remove('drag');document.body.style.cursor='';try{localStorage.setItem('fin_colw',JSON.stringify(COLW))}catch(e){}d=null;});
 })();
-function inPeriod(d){if(PERIOD==='all')return true;if(!d)return false;const now=today();if(PERIOD==='ytd')return d>=now.slice(0,4)+'-01-01';if(PERIOD==='month')return d.slice(0,7)===(PYM||now.slice(0,7));if(PERIOD==='custom')return (!PFROM||d>=PFROM)&&(!PTO||d<=PTO);return true;}
+function inPeriod(d){if(PERIOD==='all')return true;if(!d)return false;const now=today();if(PERIOD==='ytd')return d.slice(0,4)===(PYR||now.slice(0,4));if(PERIOD==='month')return d.slice(0,7)===(PYM||now.slice(0,7));if(PERIOD==='custom')return (!PFROM||d>=PFROM)&&(!PTO||d<=PTO);return true;}
 function roleScope(arr){if(IS_SUPA)return arr.slice();/* 실모드는 서버 RLS가 가시성 처리 */if(canViewAll())return arr.slice();if(ROLE==='lead')return arr.filter(r=>r.team===ME().team);return arr.filter(r=>r.requester===ME().name);}
 function visible(arr,kind){
   let list=roleScope(arr);
@@ -749,12 +750,15 @@ function toggleAll(page){const list=visible(page==='payout'?DB.payout:DB.invoice
 /* ===================== 대시보드 ===================== */
 function setPeriod(p){PERIOD=p;render();}
 function setPYMPart(k,v){const cur=PYM||today().slice(0,7);const y=k==='y'?v:cur.slice(0,4);const m=k==='m'?v:String(parseInt(cur.slice(5,7),10));PYM=y+'-'+String(m).padStart(2,'0');PERIOD='month';render();}
+function setPYR(v){PYR=String(v);PERIOD='ytd';render();}
 function periodSel(){
   const cur=PYM||today().slice(0,7);const py=+cur.slice(0,4),pm=+cur.slice(5,7);const curY=+today().slice(0,4);
+  const yr=+(PYR||today().slice(0,4));
   let ys='';for(let y=2024;y<=curY+1;y++)ys+=`<option value="${y}" ${y===py?'selected':''}>${y}년</option>`;
   let ms='';for(let m=1;m<=12;m++)ms+=`<option value="${m}" ${m===pm?'selected':''}>${m}월</option>`;
+  let yrs='';for(let y=2024;y<=curY+1;y++)yrs+=`<option value="${y}" ${y===yr?'selected':''}>${y}년</option>`;
   const monthLbl=(py===curY?'':String(py).slice(2)+'년 ')+pm+'월';
-  return `<div class="seg"><button class="${PERIOD==='month'?'on':''}" onclick="setPeriod('month')">${monthLbl}</button><button class="${PERIOD==='ytd'?'on':''}" onclick="setPeriod('ytd')">올해</button><button class="${PERIOD==='all'?'on':''}" onclick="setPeriod('all')">전체</button><button class="${PERIOD==='custom'?'on':''}" onclick="setPeriod('custom')">기간지정</button></div>${PERIOD==='month'?`<div class="seg-range"><select onchange="setPYMPart('y',this.value)">${ys}</select><select onchange="setPYMPart('m',this.value)">${ms}</select></div>`:''}${PERIOD==='custom'?`<div class="seg-range"><input type="date" value="${PFROM}" onchange="PFROM=this.value;render()"><span>~</span><input type="date" value="${PTO}" onchange="PTO=this.value;render()"></div>`:''}`;}
+  return `<div class="seg"><button class="${PERIOD==='all'?'on':''}" onclick="setPeriod('all')">전체</button><button class="${PERIOD==='month'?'on':''}" onclick="setPeriod('month')">${monthLbl}</button><button class="${PERIOD==='ytd'?'on':''}" onclick="setPeriod('ytd')">${yr}년</button><button class="${PERIOD==='custom'?'on':''}" onclick="setPeriod('custom')">기간지정</button></div>${PERIOD==='month'?`<div class="seg-range"><select onchange="setPYMPart('y',this.value)">${ys}</select><select onchange="setPYMPart('m',this.value)">${ms}</select></div>`:''}${PERIOD==='ytd'?`<div class="seg-range"><select onchange="setPYR(this.value)">${yrs}</select></div>`:''}${PERIOD==='custom'?`<div class="seg-range"><input type="date" value="${PFROM}" onchange="PFROM=this.value;render()"><span>~</span><input type="date" value="${PTO}" onchange="PTO=this.value;render()"></div>`:''}`;}
 function fmtCur(list){const m={};list.forEach(r=>{if(r.unit&&r.unit!=='원')m[r.unit]=(m[r.unit]||0)+r.amount;});return Object.entries(m).map(([u,v])=>` · ${u} ${won(v)}`).join('');}
 function payoutSumBar(list){
   /* 월 합계 — 월 선택 시 그 달, 그 외엔 이번 달 기준 */
