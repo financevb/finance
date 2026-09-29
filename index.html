@@ -337,6 +337,7 @@ const I={
   m_card:'<svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19M6 15h4"/></svg>',
 };
 /* ---------- 헬퍼 ---------- */
+function fmtD(v){return String(v||'').replace(/^20(\d{2}-\d{2}-\d{2})/,'$1');}
 function escH(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -514,7 +515,7 @@ function anomalyDetail(id){
   const r=DB.payout.find(x=>x.id===id);if(!r)return;
   const v=findVendor(r.payee);const flags=scanPayout(r);
   const stb=s=>{const st=PSTATUS[s]||['?',''];return `<span class="badge ${st[1]}">${st[0]}</span>`;};
-  let b=`<div class="dl"><dt>거래처/예금주</dt><dd>${escH(r.payee)}</dd><dt>금액</dt><dd><b>${won(r.amount)} ${escH(r.unit)}</b></dd><dt>은행·계좌</dt><dd>${escH(r.bank||'-')} <span class="num">${escH(r.account||'-')}</span></dd><dt>이체요청일</dt><dd>${escH(r.applied||'-')}</dd><dt>이체희망일</dt><dd>${escH(dueOf(r)||'-')}</dd><dt>분류·적요</dt><dd>${escH(r.category||'-')} · ${escH(purposeText(r)||'-')}</dd></div>`;
+  let b=`<div class="dl"><dt>거래처/예금주</dt><dd>${escH(r.payee)}</dd><dt>금액</dt><dd><b>${won(r.amount)} ${escH(r.unit)}</b></dd><dt>은행·계좌</dt><dd>${escH(r.bank||'-')} <span class="num">${escH(r.account||'-')}</span></dd><dt>이체요청일</dt><dd>${escH(fmtD(r.applied)||'-')}</dd><dt>이체희망일</dt><dd>${escH(fmtD(dueOf(r))||'-')}</dd><dt>분류·적요</dt><dd>${escH(r.category||'-')} · ${escH(purposeText(r)||'-')}</dd></div>`;
   if(!flags.length){b+='<div class="hr"></div><div class="t-sub">지금은 감지된 이상 신호가 없어요 👍</div>';}
   else{b+='<div class="hr"></div>';flags.forEach(f=>{
     b+=`<div class="anom-card ${f.s}"><div class="anom-t">${f.t}</div><div class="anom-d">${escH(f.d)}</div>`;
@@ -543,7 +544,7 @@ function renderAnomalies(){
   h+=`<th class="rz">거래처 · 적요<span class="rzh" data-rz="payout" onclick="event.stopPropagation()"></span></th><th style="text-align:right">금액</th><th>요청일</th><th>상태</th><th>이상 · 메모</th><th></th></tr></thead><tbody>`;
   rows.forEach(({r,f})=>{const st=PSTATUS[r.status]||['?',''];const ms=memosFor(r.id);
     const badges=f.map(flagHtml).join('')+(ms.length?`<span class="flag caution" title="${escH(ms[ms.length-1].body)}">🗒 메모 ${ms.length}</span>`:'');
-    h+=`<tr style="cursor:pointer" onclick="viewPayout('${r.id}')"><td class="rzc"><div class="t-name">${escH(r.payee)}</div><div class="t-sub">${escH(purposeText(r))}</div></td><td style="text-align:right" class="num">${won(r.amount)}${r.unit==='원'?'원':' '+r.unit}</td><td class="t-sub num" style="white-space:nowrap">${escH(r.applied||'-')}</td><td><span class="badge ${st[1]}">${st[0]}</span></td><td style="white-space:normal;max-width:260px">${badges}</td><td><button class="iconbtn" title="${f.length?'감지 근거':'상세'}" onclick="event.stopPropagation();${f.length?`anomalyDetail('${r.id}')`:`viewPayout('${r.id}')`}">${I.eye}</button></td></tr>`;
+    h+=`<tr style="cursor:pointer" onclick="viewPayout('${r.id}')"><td class="rzc"><div class="t-name">${escH(r.payee)}</div><div class="t-sub">${escH(purposeText(r))}</div></td><td style="text-align:right" class="num">${won(r.amount)}${r.unit==='원'?'원':' '+r.unit}</td><td class="t-sub num" style="white-space:nowrap">${escH(fmtD(r.applied)||'-')}</td><td><span class="badge ${st[1]}">${st[0]}</span></td><td style="white-space:normal;max-width:260px">${badges}</td><td><button class="iconbtn" title="${f.length?'감지 근거':'상세'}" onclick="event.stopPropagation();${f.length?`anomalyDetail('${r.id}')`:`viewPayout('${r.id}')`}">${I.eye}</button></td></tr>`;
   });
   h+='</tbody></table></div></div>';c.innerHTML=h;
 }
@@ -564,8 +565,8 @@ function renderProof(){
     h+=`<td class="rzc"><div class="t-name">${escH(r.payee)}</div><div class="t-sub">${escH(purposeText(r)||'-')}</div></td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.proofType)}</span></td>`;
     h+=`<td class="mhide t-sub nmcell">${r.requester?nameWrap(r.requester):'-'}</td>`;
-    h+=`<td class="t-sub num" style="white-space:nowrap">${escH(r.proofDate||'-')}</td>`;
-    h+=`<td style="white-space:nowrap">${ov?`<span class="flag warn" title="익월 10일 초과">⛔ 경과</span> <span class="t-sub num">${dls}</span>`:`<span class="t-sub num">~${dls}</span>`}</td>`;
+    h+=`<td class="t-sub num" style="white-space:nowrap">${escH(fmtD(r.proofDate)||'-')}</td>`;
+    h+=`<td style="white-space:nowrap">${ov?`<span class="flag warn" title="익월 10일 초과">⛔ 경과</span> <span class="t-sub num">${dls}</span>`:`<span class="t-sub num">~${fmtD(dls)}</span>`}</td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span>${r.unit!=='원'?' <span class="t-sub">'+r.unit+'</span>':''}</td>`;
     h+=`<td><span class="badge ${st[1]}">${st[0]}</span></td>`;
     h+=`<td><div class="rowact">${canApprove()?`<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();markProof('${r.id}',true)">수취완료</button>`:`<button class="iconbtn" title="상세" onclick="event.stopPropagation();viewPayout('${r.id}')">${I.eye}</button>`}</div></td></tr>`;
@@ -854,9 +855,9 @@ function renderPayout(){
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
     h+=`<td class="mhide rowno">${rowStart+_i+1}</td>`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
-    h+=`<td class="num mhide" style="white-space:nowrap;font-size:12px">${escH(r.applied||'-')}${r.appliedTs?`<span style="color:var(--gray-400)"> ${escH(r.appliedTs.slice(11))}</span>`:''}</td>`;
+    h+=`<td class="num mhide" style="white-space:nowrap;font-size:12px">${escH(fmtD(r.applied)||'-')}${r.appliedTs?`<span style="color:var(--gray-400)"> ${escH(r.appliedTs.slice(11))}</span>`:''}</td>`;
     const _due=dueOf(r);
-    h+=`<td class="num mhide" style="white-space:nowrap;font-size:12px">${_due?escH(_due):'<span class="t-sub">–</span>'}</td>`;
+    h+=`<td class="num mhide" style="white-space:nowrap;font-size:12px">${_due?escH(fmtD(_due)):'<span class="t-sub">–</span>'}</td>`;
     h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
     h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td>`;
     h+=`<td style="text-align:left;white-space:nowrap"><span class="t-name">${escH(r.payee)}</span> ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</td>`;
@@ -1072,10 +1073,10 @@ function viewPayout(id){
     <dt>적요</dt><dd>${escH(purposeText(r)||'-')}</dd>
     <dt>신청인</dt><dd>${escH(r.requester||'-')}</dd>
     <dt>팀</dt><dd>${escH(normalizeTeam(r.team)||'-')}</dd>
-    <dt>이체요청일</dt><dd class="num">${escH(r.appliedTs||r.applied||'-')}</dd>
-    <dt>이체희망일</dt><dd class="num">${escH(dueOf(r)||'-')}</dd>
+    <dt>이체요청일</dt><dd class="num">${escH(fmtD(r.appliedTs||r.applied)||'-')}</dd>
+    <dt>이체희망일</dt><dd class="num">${escH(fmtD(dueOf(r))||'-')}</dd>
     <dt>고액 이체건</dt><dd>${isBig(r)?'🔺 1천만+ (고액)':'해당 없음'}</dd>
-    ${r.paidAt?`<dt>지급완료</dt><dd>${escH(r.paidAt)}</dd>`:''}
+    ${r.paidAt?`<dt>지급완료</dt><dd>${escH(fmtD(r.paidAt))}</dd>`:''}
   </div>${proof}${fuel}${wh}${memoHtml(r)}`,foot);
 }
 function proofDetailHtml(r){
@@ -1084,9 +1085,9 @@ function proofDetailHtml(r){
   let body='';
   if(PROOF_ADEQ.has(r.proofType)){
     const ov=proofOverdue(r);
-    const stxt=r.proofStatus==='수취완료'?`<span class="badge badge-paid">수취완료${r.proofReceivedAt?' · '+escH(r.proofReceivedAt):''}</span>`:`<span class="badge ${ov?'badge-rejected':'badge-pending'}">받을 예정${ov?' · ⛔ 발행기한 경과':''}</span>`;
+    const stxt=r.proofStatus==='수취완료'?`<span class="badge badge-paid">수취완료${r.proofReceivedAt?' · '+escH(fmtD(r.proofReceivedAt)):''}</span>`:`<span class="badge ${ov?'badge-rejected':'badge-pending'}">받을 예정${ov?' · ⛔ 발행기한 경과':''}</span>`;
     const dl=proofDeadline(r.proofDate);const dls=dl?dl.getFullYear()+'-'+String(dl.getMonth()+1).padStart(2,'0')+'-'+String(dl.getDate()).padStart(2,'0'):'-';
-    body=`<div class="dl"><dt>증빙 유형</dt><dd>${escH(PROOF_LABEL[r.proofType]||r.proofType)}</dd><dt>작성일자</dt><dd class="num">${escH(r.proofDate||'-')}</dd><dt>발행기한</dt><dd class="num">~${dls} <span class="t-sub">(익월 10일)</span></dd><dt>발행상태</dt><dd>${stxt}</dd>${url?`<dt>증빙 링크</dt><dd>${url}</dd>`:''}</div>`;
+    body=`<div class="dl"><dt>증빙 유형</dt><dd>${escH(PROOF_LABEL[r.proofType]||r.proofType)}</dd><dt>작성일자</dt><dd class="num">${escH(fmtD(r.proofDate)||'-')}</dd><dt>발행기한</dt><dd class="num">~${fmtD(dls)} <span class="t-sub">(익월 10일)</span></dd><dt>발행상태</dt><dd>${stxt}</dd>${url?`<dt>증빙 링크</dt><dd>${url}</dd>`:''}</div>`;
     if(canApprove())body+=`<div style="margin-top:9px">${r.proofStatus==='수취완료'?`<button class="btn btn-sm btn-line" onclick="markProof('${r.id}',false)">받을예정으로 되돌리기</button>`:`<button class="btn btn-sm btn-primary" onclick="markProof('${r.id}',true)">${I.check}<span>증빙 수취완료</span></button>`}</div>`;
   }else if(r.proofType==='none'){
     body=`<div class="dl"><dt>증빙 유형</dt><dd>증빙 없음</dd><dt>사유</dt><dd>${escH(r.proofReason||'-')}</dd></div>`;
@@ -1100,7 +1101,7 @@ function markProof(id,received){sv('fin_mark_proof',{p_id:id,p_received:!!receiv
 function memoHtml(r){
   if(!canViewAll())return '';
   const ms=memosFor(r.id);
-  const list=ms.length?ms.map(m=>`<div style="background:#fffdf5;border:1px solid #f0e6c8;border-radius:9px;padding:9px 11px;margin-bottom:6px"><div style="font-size:13px;line-height:1.55;color:var(--gray-800);white-space:pre-wrap">${escH(m.body)}</div><div class="t-sub" style="margin-top:5px">${escH(m.author||'-')} · ${escH(m.at||'')}${canApprove()?` · <span onclick="delMemo('${m.id}','${r.id}')" style="color:var(--sys-red);cursor:pointer">삭제</span>`:''}</div></div>`).join(''):'<div class="t-sub">아직 메모가 없어요.</div>';
+  const list=ms.length?ms.map(m=>`<div style="background:#fffdf5;border:1px solid #f0e6c8;border-radius:9px;padding:9px 11px;margin-bottom:6px"><div style="font-size:13px;line-height:1.55;color:var(--gray-800);white-space:pre-wrap">${escH(m.body)}</div><div class="t-sub" style="margin-top:5px">${escH(m.author||'-')} · ${escH(fmtD(m.at))}${canApprove()?` · <span onclick="delMemo('${m.id}','${r.id}')" style="color:var(--sys-red);cursor:pointer">삭제</span>`:''}</div></div>`).join(''):'<div class="t-sub">아직 메모가 없어요.</div>';
   return `<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🗒 관리자 메모 <span class="t-sub" style="font-weight:400">· 관리자에게만 보여요</span></div>${list}${canApprove()?`<div style="display:flex;gap:6px;margin-top:9px"><input class="input" id="memo_in_${r.id}" placeholder="메모 추가 (예: 세금계산서 재요청함)" style="flex:1" onkeydown="if(event.key==='Enter')addMemo('${r.id}')"><button class="btn btn-sm btn-primary" onclick="addMemo('${r.id}')">추가</button></div>`:''}`;
 }
 function addMemo(id){const el=document.getElementById('memo_in_'+id);const body=el?el.value.trim():'';if(!body){toast('메모 내용을 입력해 주세요.','err');return;}
@@ -1178,7 +1179,7 @@ function renderFuel(){
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
     h+=`<td class="nmcell"><div class="t-name">${r.requester?nameWrap(r.requester):'-'}</div><div class="t-sub">${escH(normalizeTeam(r.team)||'')}</div></td>`;
     h+=`<td><div class="ellip">${escH(f.visit||r.purpose||'-')}</div><div class="t-sub">${escH((f.from||'')+(f.to?' → '+f.to:''))}${f.roundTrip?' (왕복)':''}${f.km?' · '+escH(f.km)+'km':''}</div></td>`;
-    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.applied||'-')}</td>`;
+    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(fmtD(r.applied)||'-')}</td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span></td>`;
     h+=`<td>${admin?`<button class="badge ${st[1]}" onclick="event.stopPropagation();openStatusMenu('${r.id}',event)" title="클릭해서 상태 변경">${st[0]}<span class="caret">▼</span></button>`:`<span class="badge ${st[1]}">${st[0]}</span>`}</td>`;
     h+=`<td><div class="rowact">${canDeletePayout(r)?`<button class="iconbtn" title="삭제 (본인 작성 건)" onclick="event.stopPropagation();deletePayout('${r.id}')">${I.trash}</button>`:''}</div></td></tr>`;
@@ -1230,7 +1231,7 @@ function submitBulk(){
 /* ===================== 정기/반복 이체 ===================== */
 function openTemplates(){
   const list=DB.templates;
-  const body=list.length?list.map(t=>`<div class="acct-row"><div class="ab"><div class="abk">${escH(t.payee)} · ${won(t.amount)}원</div><div class="anum">매월 · ${t.done}/${t.total}회 생성 · 다음 ${escH(t.nextDate)}</div></div>${t.done<t.total?`<button class="btn btn-sm btn-line" onclick="recurOnce('${t.id}')">다음 회차 생성</button>`:'<span class="tag tag-gray">완료</span>'}</div>`).join(''):'<div class="t-sub">등록된 정기 이체가 없어요.<br>"새 이체 요청"에서 <b>🔁 매월 정기</b>를 체크해 등록하세요.</div>';
+  const body=list.length?list.map(t=>`<div class="acct-row"><div class="ab"><div class="abk">${escH(t.payee)} · ${won(t.amount)}원</div><div class="anum">매월 · ${t.done}/${t.total}회 생성 · 다음 ${escH(fmtD(t.nextDate))}</div></div>${t.done<t.total?`<button class="btn btn-sm btn-line" onclick="recurOnce('${t.id}')">다음 회차 생성</button>`:'<span class="tag tag-gray">완료</span>'}</div>`).join(''):'<div class="t-sub">등록된 정기 이체가 없어요.<br>"새 이체 요청"에서 <b>🔁 매월 정기</b>를 체크해 등록하세요.</div>';
   modal('🔁 정기 이체 관리','',body,'<button class="btn btn-secondary" onclick="closeModal()">닫기</button>');
 }
 function recurOnce(tid){const t=DB.templates.find(x=>x.id===tid);if(!t||t.done>=t.total)return;sv('fin_recur_once',{p_id:tid},()=>{const r={id:uid('p'),requester:t.requester,team:t.team,payee:t.payee,bank:t.bank,account:t.account,amount:t.amount,unit:'원',category:t.category,purpose:t.purpose+' (정기 '+(t.done+1)+'/'+t.total+')',hasTax:t.hasTax,status:'requested',applied:t.nextDate,paidAt:''};DB.payout.unshift(r);t.done++;t.nextDate=addMonth(t.nextDate,1);}).then(()=>{closeModal();render();toast('정기 이체 회차를 생성했어요.','ok');});}
@@ -1275,7 +1276,7 @@ function renderExpense(){
     h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(EMETHOD_LABEL[r.method]||r.method)}</span></td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.category||'-')}</span></td>`;
-    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.spentDate||'-')}</td>`;
+    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(fmtD(r.spentDate)||'-')}</td>`;
     h+=`<td class="mhide">${expProofTag(r)}</td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span>${r.unit!=='원'?' <span class="t-sub">'+escH(r.unit)+'</span>':''}</td>`;
     h+=expStatusCell(r,admin)+expRowActions(r)+'</tr>';
@@ -1310,7 +1311,7 @@ function renderCardReport(){
     h+=`<td class="mhide nmcell"><div class="t-name">${r.cardHolder?nameWrap(r.cardHolder):'-'}</div><div class="t-sub num">끝 ${escH(r.cardLast4||'----')}</div></td>`;
     h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.category||'-')}</span></td>`;
-    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.spentDate||'-')}</td>`;
+    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(fmtD(r.spentDate)||'-')}</td>`;
     h+=`<td class="mhide">${expProofTag(r)}</td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span>${r.unit!=='원'?' <span class="t-sub">'+escH(r.unit)+'</span>':''}</td>`;
     h+=expStatusCell(r,admin)+expRowActions(r)+'</tr>';
@@ -1452,7 +1453,7 @@ function viewExpense(id){
     <dt>상태</dt><dd><span class="badge ${st[1]}">${st[0]}</span></dd>
     <dt>결제수단</dt><dd>${escH(EMETHOD_LABEL[r.method]||r.method)}</dd>
     ${card}
-    <dt>사용일</dt><dd>${escH(r.spentDate||'-')}</dd>
+    <dt>사용일</dt><dd>${escH(fmtD(r.spentDate)||'-')}</dd>
     <dt>사용처</dt><dd>${escH(r.merchant)}</dd>
     <dt>금액</dt><dd><b>${won(r.amount)} ${escH(r.unit)}</b></dd>
     <dt>분류</dt><dd>${escH(r.category||'-')}</dd>
@@ -1460,7 +1461,7 @@ function viewExpense(id){
     ${r.attendees?`<dt>동반 인원</dt><dd>${escH(r.attendees)}</dd>`:''}
     <dt>증빙</dt><dd>${expProofTag(r)}${(r.proofType==='none'&&r.proofReason)?' <span class="t-sub">— '+escH(r.proofReason)+'</span>':''}</dd>
     <dt>신청인</dt><dd>${escH(r.requester||'-')}${r.team?' · '+escH(normalizeTeam(r.team)):''}</dd>
-    <dt>등록일</dt><dd>${escH(r.applied||'-')}</dd>
+    <dt>등록일</dt><dd>${escH(fmtD(r.applied)||'-')}</dd>
     ${r.rejectReason?`<dt>반려 사유</dt><dd>${escH(r.rejectReason)}</dd>`:''}
   </div>`,foot);
 }
@@ -1537,13 +1538,13 @@ function renderInvoice(){
     h+=`<tr class="rowclk" onclick="viewInvoice('${r.id}')">`;
     h+=`<td class="mhide rowno">${irowStart+_i+1}</td>`;
     if(mineApprove)h+=`<td class="mhide"><input type="checkbox" class="cbx" ${_sel.has(r.id)?'checked':''} onclick="event.stopPropagation();toggleSel('${r.id}')"></td>`;
-    h+=`<td class="num" style="white-space:nowrap;font-size:12px">${escH(r.applied||'-')}</td>`;
+    h+=`<td class="num" style="white-space:nowrap;font-size:12px">${escH(fmtD(r.applied)||'-')}</td>`;
     h+=`<td class="mhide nmcell">${r.requester?nameWrap(r.requester):'<span class="t-sub">-</span>'}</td>`;
     h+=`<td class="mhide">${escH(normalizeTeam(r.team)||'-')}</td>`;
     h+=`<td style="text-align:left;white-space:nowrap"><span class="t-name">${escH(r.company)}</span></td>`;
     h+=`<td class="mhide num">${escH(r.bizNo||'-')}</td>`;
     h+=`<td class="mhide" style="font-size:12px;text-align:left;white-space:nowrap">${escH(r.email||'-')}</td>`;
-    h+=`<td class="num mhide" style="white-space:nowrap;font-size:12px">${escH(r.writeDate||'-')}</td>`;
+    h+=`<td class="num mhide" style="white-space:nowrap;font-size:12px">${escH(fmtD(r.writeDate)||'-')}</td>`;
     h+=`<td style="text-align:left;white-space:nowrap" title="${escH(r.itemName||'')}">${escH(r.itemName)}</td>`;
     h+=`<td class="mhide"><span class="tag tag-gray">${escH(r.saleType||'매출')}</span></td>`;
     h+=`<td class="mhide num" style="text-align:right">${won(r.supply)}</td>`;
@@ -1552,9 +1553,9 @@ function renderInvoice(){
     const dd=depData(r.id);
     h+=`<td class="mhide num" style="text-align:right">${dd.amt?`<span${dd.amt!==r.total?' style="color:var(--sys-orange);font-weight:700" title="세금계산서 합계와 달라요"':''}>${won(dd.amt)}</span>`:'<span class="t-sub">–</span>'}</td>`;
     h+=`<td class="mhide" style="max-width:160px;text-align:left">${canDeposit()?`<div style="font-size:12px;white-space:normal;word-break:break-all;cursor:pointer;line-height:1.4" onclick="event.stopPropagation();openDepositForm('${r.id}')" title="클릭해서 메모 입력">${dd.note?escH(dd.note):'<span class="t-sub">＋ 메모</span>'}</div>`:`<div style="font-size:12px;white-space:normal;word-break:break-all;line-height:1.4">${dd.note?escH(dd.note):'<span class="t-sub">–</span>'}</div>`}</td>`;
-    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(r.issuedAt||'-')}</td>`;
+    h+=`<td class="t-sub num mhide" style="white-space:nowrap">${escH(fmtD(r.issuedAt)||'-')}</td>`;
     h+=`<td><span class="badge ${st[1]}">${st[0]}</span>${r.status==='requested'?('<div style="margin-top:3px">'+(deadlineBadge(r.writeDate)||'')+'</div>'):''}</td>`;
-    h+=`<td>${dd.d?(canDeposit()?`<button class="depbtn depon" onclick="event.stopPropagation();openDepositForm('${r.id}')" title="클릭해서 수정/취소">✔ ${escH(dd.d)}</button>`:`<span class="badge badge-deposit">✔ ${escH(dd.d)}</span>`):(r.status==='issued'?(canDeposit()?`<button class="depbtn" onclick="event.stopPropagation();openDepositForm('${r.id}')">☐ 미확인</button>`:'<span class="t-sub">미확인</span>'):'<span class="t-sub">–</span>')}</td>`;
+    h+=`<td>${dd.d?(canDeposit()?`<button class="depbtn depon" onclick="event.stopPropagation();openDepositForm('${r.id}')" title="클릭해서 수정/취소">✔ ${escH(fmtD(dd.d))}</button>`:`<span class="badge badge-deposit">✔ ${escH(fmtD(dd.d))}</span>`):(r.status==='issued'?(canDeposit()?`<button class="depbtn" onclick="event.stopPropagation();openDepositForm('${r.id}')">☐ 미확인</button>`:'<span class="t-sub">미확인</span>'):'<span class="t-sub">–</span>')}</td>`;
     h+=`<td><div class="rowact"><button class="iconbtn" title="홈택스 발행 엑셀" onclick="event.stopPropagation();exportInvoiceOne('${r.id}')">${I.download}</button><button class="iconbtn" title="복제" onclick="event.stopPropagation();cloneInvoice('${r.id}')">${I.copy}</button>${canEditInvoice(r)?`<button class="iconbtn" title="수정" onclick="event.stopPropagation();editInvoice('${r.id}')">✏️</button>`:''}${canDeleteInvoice(r)?`<button class="iconbtn" title="삭제" onclick="event.stopPropagation();deleteInvoice('${r.id}')">${I.trash}</button>`:''}</div></td></tr>`;
   });
   h+='</tbody></table></div></div>'+pagerHtml(list.length);
@@ -1672,7 +1673,7 @@ function viewInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;cons
   let foot=`${invEditBtn}<button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')"><span>복제</span></button><button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
   if(canApprove()&&r.status==='requested')foot=`${invEditBtn}<button class="btn btn-danger" onclick="decideInvoice('${id}','rejected')">반려</button><button class="btn btn-primary" onclick="decideInvoice('${id}','issued')">발행완료</button>`;
   if(canApprove()&&r.status==='issued')foot=`<button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')"><span>복제</span></button>${canDeposit()?`<button class="btn btn-primary" onclick="openDepositForm('${id}')">${depositOf(id)?'입금확인됨 ('+depositOf(id)+')':'입금확인'}</button>`:`<button class="btn btn-secondary" onclick="closeModal()">닫기</button>`}`;
-  modal('세금계산서 발행 요청 상세','',`<div style="margin-bottom:10px">${deadlineBadge(r.writeDate)}</div><div class="dl"><dt>상태</dt><dd><span class="badge ${st[1]}">${st[0]}</span></dd><dt>구분</dt><dd>${escH(r.saleType||'매출')}</dd><dt>상호</dt><dd>${escH(r.company)} (${escH(r.ceo)})</dd><dt>사업자번호</dt><dd class="num">${escH(r.bizNo)}</dd><dt>이메일</dt><dd>${escH(r.email)}</dd><dt>품목</dt><dd>${escH(r.itemName)}</dd><dt>작성일자</dt><dd>${escH(r.writeDate)}</dd><dt>공급가액</dt><dd>${won(r.supply)}원</dd><dt>세액</dt><dd>${won(r.tax)}원</dd><dt>합계</dt><dd><b>${won(r.total)}원</b></dd><dt>신청인</dt><dd>${escH(r.requester||'-')}</dd><dt>팀</dt><dd>${escH(normalizeTeam(r.team)||'-')}</dd>${r.evidence?`<dt>증빙</dt><dd><a href="${escH(r.evidence)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">Dropbox 링크 ↗</a></dd>`:''}</div>`,foot);
+  modal('세금계산서 발행 요청 상세','',`<div style="margin-bottom:10px">${deadlineBadge(r.writeDate)}</div><div class="dl"><dt>상태</dt><dd><span class="badge ${st[1]}">${st[0]}</span></dd><dt>구분</dt><dd>${escH(r.saleType||'매출')}</dd><dt>상호</dt><dd>${escH(r.company)} (${escH(r.ceo)})</dd><dt>사업자번호</dt><dd class="num">${escH(r.bizNo)}</dd><dt>이메일</dt><dd>${escH(r.email)}</dd><dt>품목</dt><dd>${escH(r.itemName)}</dd><dt>작성일자</dt><dd>${escH(fmtD(r.writeDate))}</dd><dt>공급가액</dt><dd>${won(r.supply)}원</dd><dt>세액</dt><dd>${won(r.tax)}원</dd><dt>합계</dt><dd><b>${won(r.total)}원</b></dd><dt>신청인</dt><dd>${escH(r.requester||'-')}</dd><dt>팀</dt><dd>${escH(normalizeTeam(r.team)||'-')}</dd>${r.evidence?`<dt>증빙</dt><dd><a href="${escH(r.evidence)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">Dropbox 링크 ↗</a></dd>`:''}</div>`,foot);
 }
 function decideInvoice(id,status){sv('fin_decide_invoice',{p_id:id,p_status:status,p_reason:''},()=>{const r=DB.invoice.find(x=>x.id===id);if(r){r.status=status;if(status==='issued')r.issuedAt=today();}}).then(()=>{closeModal();render();toast(status==='issued'?'발행완료로 표시했어요.':'반려했어요.',status==='rejected'?'err':'ok');});}
 function openDepositForm(id){
@@ -1903,7 +1904,7 @@ function renderVendors(){
 }
 function viewVendor(id){const v=VENDORS.find(x=>x.id===id);if(!v)return;
   const accts=v.accounts.map((a,i)=>`<div class="acct-row ${a.primary?'primary':''}"><div class="ab"><div class="abk">${escH(a.bank)} ${a.primary?'<span class="tag tag-blue" style="margin-left:4px">대표</span>':''}</div><div class="anum num">${escH(a.account)} · ${escH(a.holder)}</div></div>${a.primary?'':`<button class="btn btn-sm btn-line" onclick="setPrimary('${v.id}',${i})">대표 지정</button>`}</div>`).join('');
-  modal('거래처 — '+v.name,'',`<div class="dl"><dt>사업자번호</dt><dd class="num">${v.bizNo?escH(v.bizNo):'없음'}</dd><dt>이메일</dt><dd>${escH(v.email||'-')}</dd><dt>등록 요청</dt><dd>${escH(v._req||'-')}</dd><dt>거래 횟수</dt><dd>${v.cnt}회</dd><dt>누적 이체</dt><dd><b>${v._pay?won(v._pay)+(v.unit!=='원'?' '+v.unit:'원'):'-'}</b></dd><dt>세금계산서 발행</dt><dd><b>${v._inv?won(v._inv)+'원':'-'}</b></dd><dt>최근거래</dt><dd>${escH(v.lastDate||'-')}</dd></div><div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:9px">등록 계좌 ${v.accounts.length}개</div>${accts}<div class="t-sub" style="margin-top:6px">※ 신규 이체 요청 시 대표계좌와 다른 계좌면 ⚠️ 계좌변경으로 표시됩니다.</div><div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:9px">📎 거래처 서류 ${(v.bankbookUrl&&v.bizregUrl)?'<span class="tag tag-blue" style="margin-left:4px">등록완료</span>':'<span class="tag tag-gray" style="margin-left:4px">미비</span>'}</div><div class="dl"><dt>통장 사본</dt><dd>${v.bankbookUrl?`<a href="${escH(v.bankbookUrl)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">링크 ↗</a>`:'<span class="t-sub">미등록</span>'}</dd><dt>사업자등록증</dt><dd>${v.bizregUrl?`<a href="${escH(v.bizregUrl)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">링크 ↗</a>`:'<span class="t-sub">미등록</span>'}</dd></div>${canApprove()?`<button class="btn btn-sm btn-line" style="margin-top:9px" onclick="editVendorDocs('${v.id}')">서류 링크 등록/수정</button>`:''}<div class="t-sub" style="margin-top:7px">한 번 등록하면 이 거래처의 모든 이체에 자동으로 연결돼요.</div>`,`<button class="btn btn-secondary" onclick="closeModal()">닫기</button><button class="btn btn-primary" onclick="newFromVendor('${v.id}')">이 거래처로 이체 요청</button>`);
+  modal('거래처 — '+v.name,'',`<div class="dl"><dt>사업자번호</dt><dd class="num">${v.bizNo?escH(v.bizNo):'없음'}</dd><dt>이메일</dt><dd>${escH(v.email||'-')}</dd><dt>등록 요청</dt><dd>${escH(fmtD(v._req)||'-')}</dd><dt>거래 횟수</dt><dd>${v.cnt}회</dd><dt>누적 이체</dt><dd><b>${v._pay?won(v._pay)+(v.unit!=='원'?' '+v.unit:'원'):'-'}</b></dd><dt>세금계산서 발행</dt><dd><b>${v._inv?won(v._inv)+'원':'-'}</b></dd><dt>최근거래</dt><dd>${escH(v.lastDate||'-')}</dd></div><div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:9px">등록 계좌 ${v.accounts.length}개</div>${accts}<div class="t-sub" style="margin-top:6px">※ 신규 이체 요청 시 대표계좌와 다른 계좌면 ⚠️ 계좌변경으로 표시됩니다.</div><div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:9px">📎 거래처 서류 ${(v.bankbookUrl&&v.bizregUrl)?'<span class="tag tag-blue" style="margin-left:4px">등록완료</span>':'<span class="tag tag-gray" style="margin-left:4px">미비</span>'}</div><div class="dl"><dt>통장 사본</dt><dd>${v.bankbookUrl?`<a href="${escH(v.bankbookUrl)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">링크 ↗</a>`:'<span class="t-sub">미등록</span>'}</dd><dt>사업자등록증</dt><dd>${v.bizregUrl?`<a href="${escH(v.bizregUrl)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">링크 ↗</a>`:'<span class="t-sub">미등록</span>'}</dd></div>${canApprove()?`<button class="btn btn-sm btn-line" style="margin-top:9px" onclick="editVendorDocs('${v.id}')">서류 링크 등록/수정</button>`:''}<div class="t-sub" style="margin-top:7px">한 번 등록하면 이 거래처의 모든 이체에 자동으로 연결돼요.</div>`,`<button class="btn btn-secondary" onclick="closeModal()">닫기</button><button class="btn btn-primary" onclick="newFromVendor('${v.id}')">이 거래처로 이체 요청</button>`);
 }
 function editVendorDocs(id){const v=VENDORS.find(x=>x.id===id);if(!v)return;
   modal('거래처 서류 — '+v.name,'',`<div class="form-row"><label>통장 사본 (Dropbox 링크)</label><input class="input" id="vd_bank" value="${escH(v.bankbookUrl||'')}" placeholder="https://www.dropbox.com/..."></div><div class="form-row"><label>사업자등록증 (Dropbox 링크)</label><input class="input" id="vd_biz" value="${escH(v.bizregUrl||'')}" placeholder="https://www.dropbox.com/..."></div><div class="t-sub">한 번 등록하면 이 거래처의 모든 이체에 자동으로 연결돼요. 동일 거래처는 매번 올릴 필요 없어요.</div>`,`<button class="btn btn-secondary" onclick="viewVendor('${id}')">취소</button><button class="btn btn-primary" onclick="saveVendorDocs('${id}')">저장</button>`);
