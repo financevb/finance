@@ -603,7 +603,11 @@ function inPeriod(d){if(PERIOD==='all')return true;if(!d)return false;const now=
 function roleScope(arr){if(IS_SUPA)return arr.slice();/* 실모드는 서버 RLS가 가시성 처리 */if(canViewAll())return arr.slice();if(ROLE==='lead')return arr.filter(r=>r.team===ME().team);return arr.filter(r=>r.requester===ME().name);}
 function visible(arr,kind){
   let list=roleScope(arr);
-  if(PERIOD!=='all'){const df=(kind==='invoice')?'writeDate':(isExpPage(kind)?'spentDate':'applied');list=list.filter(r=>inPeriod(r[df]));}
+  if(PERIOD!=='all'){
+    /* 이체요청·유류비는 이체희망일 기준(없으면 요청일)으로 기간 필터 */
+    if(kind==='payout'||kind==='fuel')list=list.filter(r=>inPeriod(dueOf(r)||r.applied));
+    else{const df=(kind==='invoice')?'writeDate':(isExpPage(kind)?'spentDate':'applied');list=list.filter(r=>inPeriod(r[df]));}
+  }
   if(FILTER.teams.size)list=list.filter(r=>FILTER.teams.has(normalizeTeam(r.team)));
   /* 취소 건은 기본 숨김 — 필터에서 '취소'를 선택한 경우에만 표시 */
   if((kind==='payout'||kind==='fuel'||kind==='invoice')&&!FILTER.statuses.has('canceled'))list=list.filter(r=>r.status!=='canceled');
@@ -756,7 +760,7 @@ function payoutSumBar(list){
   /* 월 합계 — 월 선택 시 그 달, 그 외엔 이번 달 기준 */
   const ym=(PERIOD==='month'&&PYM)?PYM:today().slice(0,7);const mon=parseInt(ym.slice(5,7),10);
   const yPre=ym.slice(0,4)===today().slice(0,4)?'':ym.slice(2,4)+'년 ';
-  const monthRows=DB.payout.filter(r=>r.unit==='원'&&(r.applied||'').slice(0,7)===ym&&r.status!=='canceled'&&r.status!=='rejected');
+  const monthRows=DB.payout.filter(r=>r.unit==='원'&&(dueOf(r)||r.applied||'').slice(0,7)===ym&&r.status!=='canceled'&&r.status!=='rejected');
   const monthSum=monthRows.reduce((s,r)=>s+r.amount,0);
   const pendAll=DB.payout.filter(r=>r.status==='requested');
   const pendKrw=pendAll.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);
