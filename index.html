@@ -737,14 +737,14 @@ function render(){
   buildNav();p.render();
   hopeBoxInit();
 }
-/* ── 임시 도구: 과거분 이체희망일 채우기 (정채영 전용, 완료 후 제거 예정) ── */
+/* ── 임시 도구: 엑셀 대조 보정 (정채영 전용, 완료 후 제거 예정) ── */
 function hopeBoxInit(){
   if(!IS_SUPA||typeof canManageAll!=='function'||!canManageAll())return;
   if(document.getElementById('hopeBox'))return;
-  try{if(localStorage.getItem('fin_hope_done_v1'))return;}catch(e){}
+  try{if(localStorage.getItem('fin_fix_done_v2'))return;}catch(e){}
   const box=document.createElement('div');box.id='hopeBox';
-  box.style.cssText='position:fixed;bottom:18px;right:18px;z-index:9999;background:#fff;border:2px solid #3182F6;border-radius:14px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.15);font-size:13px;max-width:290px';
-  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#3182F6">📅 이체희망일 채우기</b><span onclick="document.getElementById(\'hopeBox\').remove()" style="cursor:pointer;color:#999;font-weight:700;padding:0 4px">✕</span></div><div style="margin:6px 0 8px;color:#555">구글시트 엑셀 파일을 선택하면<br>과거 이체 건의 <b>이체희망일</b>을 자동으로 채워요.</div><input type="file" id="hopeFile" accept=".xlsx" style="width:100%"><div id="hopeSt" style="margin-top:8px;color:#3182F6;font-weight:600"></div>';
+  box.style.cssText='position:fixed;bottom:18px;right:18px;z-index:9999;background:#fff;border:2px solid #3182F6;border-radius:14px;padding:14px 16px;box-shadow:0 6px 24px rgba(0,0,0,.15);font-size:13px;max-width:300px';
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#3182F6">📅 엑셀 대조 보정</b><span onclick="document.getElementById(\'hopeBox\').remove()" style="cursor:pointer;color:#999;font-weight:700;padding:0 4px">✕</span></div><div style="margin:6px 0 8px;color:#555">구글시트 엑셀 파일을 선택하면<br>이체 건의 <b>요청일·희망일·지급일</b>을<br>엑셀 기준으로 검수해서 고쳐요.</div><input type="file" id="hopeFile" accept=".xlsx" style="width:100%"><div id="hopeSt" style="margin-top:8px;color:#3182F6;font-weight:600"></div>';
   document.body.appendChild(box);
   document.getElementById('hopeFile').addEventListener('change',e=>{if(e.target.files[0])hopeBackfill(e.target.files[0]);});
 }
@@ -761,43 +761,55 @@ async function hopeBackfill(file){
       let hi=-1;for(let i=0;i<Math.min(rows.length,5);i++){if(rows[i].some(c=>String(c).includes('요청일자'))){hi=i;break;}}
       if(hi<0)return;
       const H=rows[hi].map(c=>String(c).replace(/\s/g,''));const col=t=>H.findIndex(h=>h.includes(t));
-      const c={d:col('요청일자'),why:col('이체사유'),acc:col('계좌번호'),amt:col('금액'),payee:col('예금주'),hope:col('이체희망일'),memo:col('비고')};
-      if(c.d<0||c.amt<0||c.payee<0||c.hope<0)return;
+      const c={d:col('요청일자'),why:col('이체사유'),acc:col('계좌번호'),amt:col('금액'),payee:col('예금주'),hope:col('이체희망일'),done:col('이체완료일'),memo:col('비고')};
+      if(c.d<0||c.amt<0||c.payee<0)return;
       rows.slice(hi+1).forEach(r=>{
         if(String(r[0]).indexOf('예시')===0)return;
-        const d=_impDate(r[c.d],defYear);const amount=_impNum(r[c.amt]);const hope=_impDate(r[c.hope],defYear);
-        if(!d||!amount||!hope)return;
+        const d=_impDate(r[c.d],defYear);const amount=_impNum(r[c.amt]);
+        if(!d||!amount)return;
+        const hope=c.hope>=0?_impDate(r[c.hope],defYear):'';
+        const done=c.done>=0?_impDate(r[c.done],defYear):'';
         const why=String(r[c.why]||'').trim();const memo=c.memo>=0?String(r[c.memo]||'').trim():'';
         const acc=(typeof r[c.acc]==='number'?String(Math.round(r[c.acc])):String(r[c.acc]||'')).replace(/\D/g,'');
         const k1=acc+'|'+amount+'|'+strip(String(r[c.payee]||''));
-        (idx[k1]=idx[k1]||[]).push({a:strip(why+(memo?' · '+memo:'')),b:strip(why),hope,used:false});
+        (idx[k1]=idx[k1]||[]).push({a:strip(why+(memo?' · '+memo:'')),b:strip(why),hope,d,done,used:false});
         sheetRows++;
       });
     });
     say('대조 중… (엑셀 '+sheetRows+'건)');
     const core=p=>String(p||'').replace(/^\[희망 \d{4}-\d{2}-\d{2}\]\s*/,'').replace(/\s+/g,'');
-    const targets=[];let noMatch=0;
+    const jobs=[];let noMatch=0;
     DB.payout.forEach(r=>{
-      if(/^\[희망 /.test(r.purpose||''))return;
       const k1=String(r.account||'').replace(/\D/g,'')+'|'+(Number(r.amount)||0)+'|'+String(r.payee||'').replace(/\s/g,'');
       const cands=idx[k1];if(!cands){noMatch++;return;}
       const pc=core(r.purpose);
       let m=cands.find(x=>!x.used&&(x.a===pc||x.b===pc));
-      if(!m){const free=cands.filter(x=>!x.used);if(free.length===1&&cands.length===1)m=free[0];}
+      if(!m){const free=cands.filter(x=>!x.used);if(free.length===1&&cands.length===1&&!/^\[희망 /.test(r.purpose||''))m=free[0];}
       if(!m){noMatch++;return;}
-      m.used=true;targets.push({id:r.id,purpose:'[희망 '+m.hope+'] '+(r.purpose||'')});
+      m.used=true;
+      const upd={};
+      /* 희망일 태그 보정 */
+      if(m.hope){
+        const cur=(r.purpose||'').match(/^\[희망 (\d{4}-\d{2}-\d{2})\]\s*/);
+        if(!cur)upd.purpose='[희망 '+m.hope+'] '+(r.purpose||'');
+        else if(cur[1]!==m.hope)upd.purpose='[희망 '+m.hope+'] '+(r.purpose||'').slice(cur[0].length);
+      }
+      /* 요청일 보정 */
+      if(m.d&&r.applied!==m.d)upd.created_at=m.d+'T12:00:00+09:00';
+      /* 지급일 보정 */
+      if(r.status==='paid'&&m.done&&r.paidAt!==m.done)upd.paid_date=m.done;
+      if(Object.keys(upd).length)jobs.push({id:r.id,upd});
     });
     let done=0,fail=0;
-    for(let i=0;i<targets.length;i+=15){
-      const batch=targets.slice(i,i+15);
-      const rs=await Promise.all(batch.map(t=>sb.from('fin_payouts').update({purpose:t.purpose}).eq('id',t.id)));
+    for(let i=0;i<jobs.length;i+=15){
+      const rs=await Promise.all(jobs.slice(i,i+15).map(t=>sb.from('fin_payouts').update(t.upd).eq('id',t.id)));
       rs.forEach(x=>x.error?fail++:done++);
-      say('채우는 중… '+(done+fail)+'/'+targets.length);
+      say('고치는 중… '+(done+fail)+'/'+jobs.length);
     }
-    say('✅ 완료! '+done+'건 채움'+(fail?' · 실패 '+fail:'')+' · 대상 아님 '+noMatch+'건');
-    try{localStorage.setItem('fin_hope_done_v1','1');}catch(e){}
+    say('✅ 완료! '+done+'건 보정'+(fail?' · 실패 '+fail:'')+' · 수정 불필요/대상 아님 '+(DB.payout.length-jobs.length)+'건');
+    try{localStorage.setItem('fin_fix_done_v2','1');}catch(e){}
     await loadData();render();
-    setTimeout(()=>{const b=document.getElementById('hopeBox');if(b)b.remove();},8000);
+    setTimeout(()=>{const b=document.getElementById('hopeBox');if(b)b.remove();},10000);
   }catch(e){say('오류: '+((e&&e.message)||e));}
 }
 let _searchT=null,_composing=false;
@@ -1855,9 +1867,9 @@ async function runSheetSync(){
 }
 function _impNum(v){if(typeof v==='number')return v;const n=parseFloat(String(v).replace(/[,\s원]/g,''));return isNaN(n)?0:n;}
 function _impDate(v,defYear){
-  if(v instanceof Date&&!isNaN(v)){const d=new Date(v.getTime()+9*3600*1000);return d.toISOString().slice(0,10);}
+  if(v instanceof Date&&!isNaN(v)){const t=v.getTime()+9*3600*1000;return new Date(Math.round(t/86400000)*86400000).toISOString().slice(0,10);} /* 날짜 셀이 전날 23:59로 저장되는 문제 보정 */
   if(typeof v==='number'&&v>40000&&v<60000){const d=new Date(Math.round((v-25569)*86400*1000)+9*3600*1000);return d.toISOString().slice(0,10);}
-  if(typeof v==='string'){const s=v.trim();let m=s.match(/(\d{4})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);if(m)return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');m=s.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);if(m&&defYear)return defYear+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');}
+  if(typeof v==='string'){const s=v.trim();let m=s.match(/(\d{4})[-./년\s]+(\d{1,2})[-./월\s]+(\d{1,2})/);if(m)return m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');m=s.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{2})$/);if(m)return '20'+m[3]+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');m=s.match(/^(\d{1,2})[/.](\d{1,2})$/);if(m&&defYear)return defYear+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');m=s.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);if(m&&defYear)return defYear+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');}
   return '';
 }
 function runDepositImport(){
