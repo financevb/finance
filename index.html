@@ -404,6 +404,7 @@ const canApprove=()=>['finance','exec','viewer'].includes(ROLE); // 처리(지�
 const canReject=()=>canApprove()&&ME().name==='정채영'; // 이체 반려는 정채영만 가능
 const canDeposit=()=>canApprove()&&ME().name==='정채영'; // 입금확인·실제입금액·내용 기입도 정채영만
 const canManageAll=()=>canApprove()&&ME().name==='정채영'; // 정채영은 모든 요청 수정·삭제 가능
+const canSeeTeamStats=()=>['정채영','이정윤','정혜민'].includes(ME().name); // 대시보드 팀별 이체 현황 열람
 const canVendorAdmin=()=>['finance','exec','viewer'].includes(ROLE); // 신규 거래처 승인·등록 = admin 3인
 const THRESHOLD_NOTIFY=THRESHOLD; // 1천만+ → 데모 대표 대표 메일 통지(승인 아님)
 const isBig=r=>!!(r&&r.unit==='원'&&(Number(r.amount)||0)>=THRESHOLD);
@@ -899,7 +900,7 @@ function renderDashboard(){
     <div class="kpi ${anomCnt?'red':'green'} click" onclick="landing('payout',{anomaly:true})"><div class="lbl">이상거래 감지</div><div class="val">${anomCnt}건</div></div>
   </div>`;
   h+=`<div class="dash2">
-    <div class="panel"><h3>팀별 이체 현황 (원화) · 클릭 시 이동</h3>${teamArr.map(([t,v])=>`<div class="barrow clk" onclick="landing('payout',{team:'${t}'})"><div class="bl">${escH(t)}</div><div class="bt"><i style="width:${Math.max(3,100*v.sum/tmax)}%"></i></div><div class="bv">${won(v.sum)} · ${v.cnt}건</div></div>`).join('')||'<div class="t-sub">데이터 없음</div>'}</div>
+    ${canSeeTeamStats()?`<div class="panel"><h3>팀별 이체 현황 (원화) · 클릭 시 이동</h3>${teamArr.map(([t,v])=>`<div class="barrow clk" onclick="landing('payout',{team:'${t}'})"><div class="bl">${escH(t)}</div><div class="bt"><i style="width:${Math.max(3,100*v.sum/tmax)}%"></i></div><div class="bv">${won(v.sum)} · ${v.cnt}건</div></div>`).join('')||'<div class="t-sub">데이터 없음</div>'}</div>`:''}
     <div class="panel"><h3>상태 분포</h3>${['requested','paid','rejected'].map(st=>{const n=P.filter(r=>r.status===st).length;return `<div class="barrow clk" onclick="landing('payout',{status:'${st}'})"><div class="bl">${PSTATUS[st][0]}</div><div class="bt"><i style="width:${Math.max(3,100*n/Math.max(1,P.length))}%"></i></div><div class="bv">${n}건</div></div>`;}).join('')}<div class="hr"></div><div style="font-size:12.5px;color:var(--gray)">세금계산서 발행요청 ${Iv.length}건 · 발행완료 ${Iv.filter(r=>r.status==='issued').length}건 · 입금확인 ${Iv.filter(r=>depositOf(r.id)).length}건</div></div>
   </div>`;
   h+=`<div class="dash2">
