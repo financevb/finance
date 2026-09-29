@@ -760,6 +760,15 @@ function periodSel(){
   const monthLbl=(py===curY?'':String(py).slice(2)+'년 ')+pm+'월';
   return `<div class="seg"><button class="${PERIOD==='all'?'on':''}" onclick="setPeriod('all')">전체</button><button class="${PERIOD==='month'?'on':''}" onclick="setPeriod('month')">${monthLbl}</button><button class="${PERIOD==='ytd'?'on':''}" onclick="setPeriod('ytd')">${yr}년</button><button class="${PERIOD==='custom'?'on':''}" onclick="setPeriod('custom')">기간지정</button></div>${PERIOD==='month'?`<div class="seg-range"><select onchange="setPYMPart('y',this.value)">${ys}</select><select onchange="setPYMPart('m',this.value)">${ms}</select></div>`:''}${PERIOD==='ytd'?`<div class="seg-range"><select onchange="setPYR(this.value)">${yrs}</select></div>`:''}${PERIOD==='custom'?`<div class="seg-range"><input type="date" value="${PFROM}" onchange="PFROM=this.value;render()"><span>~</span><input type="date" value="${PTO}" onchange="PTO=this.value;render()"></div>`:''}`;}
 function fmtCur(list){const m={};list.forEach(r=>{if(r.unit&&r.unit!=='원')m[r.unit]=(m[r.unit]||0)+r.amount;});return Object.entries(m).map(([u,v])=>` · ${u} ${won(v)}`).join('');}
+/* 미지급 대기 카드 클릭 → 미지급 건만 표시 (다시 클릭하면 해제) */
+function _pendOnly(){return FILTER.statuses.size===1&&FILTER.statuses.has('requested')&&PERIOD==='all';}
+function togglePendingFilter(){
+  const on=_pendOnly();
+  clearFilter();
+  if(on){PERIOD=window._prevPeriod||'month';}
+  else{window._prevPeriod=PERIOD;FILTER.statuses.add('requested');PERIOD='all';}
+  render();
+}
 function payoutSumBar(list){
   /* 월 합계 — 월 선택 시 그 달, 그 외엔 이번 달 기준 */
   const ym=(PERIOD==='month'&&PYM)?PYM:today().slice(0,7);const mon=parseInt(ym.slice(5,7),10);
@@ -770,7 +779,7 @@ function payoutSumBar(list){
   const pendKrw=pendAll.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);
   return `<div class="statrow">
     <div class="stat"><span class="sl">${yPre}${mon}월 이체 합계</span><span class="sv">${won(monthSum)}원<small>${monthRows.length}건</small></span></div>
-    <div class="stat o"><span class="sl">미지급 대기 (전체)</span><span class="sv">${won(pendKrw)}원<small>${pendAll.length}건</small></span></div>
+    <div class="stat o" onclick="togglePendingFilter()" style="cursor:pointer" title="클릭하면 미지급 건만 표시">${_pendOnly()?'<span class="sl" style="color:var(--sys-orange);font-weight:700">미지급 대기만 표시 중 — 클릭해서 해제</span>':'<span class="sl">미지급 대기 (전체) <span style="color:var(--billy-blue)">👆</span></span>'}<span class="sv">${won(pendKrw)}원<small>${pendAll.length}건</small></span></div>
     <div class="stat b"><span class="sl">표시 건수</span><span class="sv">${list.length}건</span></div>
     <div class="statx"><button class="btn btn-line" onclick="exportPayoutList()">${I.download}<span>엑셀 다운로드</span></button></div>
   </div>`;}
