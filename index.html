@@ -129,7 +129,7 @@ tbody tr:last-child td{border-bottom:none}
 .t-sub{color:var(--gray);font-size:12px;font-weight:400}
 .nmcell{word-break:keep-all}
 th.rz{position:relative;width:var(--cw,300px);min-width:120px}.rzh{position:absolute;top:16%;right:-3px;width:8px;height:68%;cursor:col-resize;z-index:3;border-right:2px solid var(--gray-200)}.rzh:hover,.rzh.drag{border-right-color:var(--billy-blue)}td.rzc>div{max-width:var(--cw,300px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}td.rzc>.t-name{white-space:normal;text-overflow:clip;line-height:1.35}
-.period-bar{margin-bottom:12px}.sortctl{display:inline-flex;align-items:center;gap:6px}.sortctl .sl{font-size:12px;color:var(--gray);font-weight:600}.filters select{height:34px;border:1px solid var(--gray-200);border-radius:9px;padding:0 8px;font-size:12.5px;background:#fff;color:var(--gray-800);cursor:pointer}.seg-range{display:flex;align-items:center;gap:8px;margin:9px 0 2px;font-size:13px;color:var(--gray-700)}.seg-range input{height:34px;padding:0 10px;border:1px solid var(--gray-200);border-radius:9px;font-size:13px}
+.period-bar{margin-bottom:12px}.sortctl{display:inline-flex;align-items:center;gap:6px}.sortctl .sl{font-size:12px;color:var(--gray);font-weight:600}.filters select{height:34px;border:1px solid var(--gray-200);border-radius:9px;padding:0 8px;font-size:12.5px;background:#fff;color:var(--gray-800);cursor:pointer}.seg-range{display:flex;align-items:center;gap:8px;margin:9px 0 2px;font-size:13px;color:var(--gray-700)}.seg-range input,.seg-range select{height:34px;padding:0 10px;border:1px solid var(--gray-200);border-radius:9px;font-size:13px;background:#fff;color:var(--gray-800);cursor:pointer}
 .sumbar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--billy-blue-50);border:1px solid var(--billy-blue-100);border-radius:12px;padding:10px 16px;margin-bottom:14px;font-size:13px;color:var(--gray-800)}.sumbar .sb-seg span{color:var(--gray)}.sumbar b{font-weight:800}.sumbar .sb-x{margin-left:auto}
 .todo{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff7ed;border:1px solid #ffe2bb;border-radius:12px;padding:10px 15px;margin-bottom:14px;font-size:13px}.todo.ok{background:#e8f6ee;border-color:#bce6cf;color:#1f7a45}.todo-h{font-weight:800;color:var(--billy-blue)}.todo-item{background:#fff;border:1px solid var(--gray-200);border-radius:999px;padding:6px 13px;cursor:pointer;font-size:12.5px;color:var(--gray-800)}.todo-item b{color:var(--sys-orange)}.todo-item.warn b{color:var(--sys-red)}.todo-item:hover{box-shadow:0 0 0 2px var(--billy-blue-50)}
 .flagwrap{cursor:pointer}.anom-card{border:1px solid var(--gray-200);border-radius:10px;padding:11px 13px;margin-bottom:10px}.anom-card.warn{background:#fdecec;border-color:#f7c9c9}.anom-card.caution{background:#fff7ed;border-color:#ffe2bb}.anom-t{font-weight:800;font-size:13px;margin-bottom:3px}.anom-d{font-size:12.5px;color:var(--gray-700);margin-bottom:8px;line-height:1.5}.anom-list{display:flex;flex-direction:column;gap:5px}.anom-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px;background:#fff;border:1px solid var(--gray-100);border-radius:8px;padding:6px 10px}.anom-row span{color:var(--gray)}.anom-row b{font-weight:700;color:var(--gray-800)}.anom-row.warn{border-color:#f7c9c9;background:#fff6f6}
@@ -589,6 +589,7 @@ const SORTS={payout:[['date','이체요청일'],['due','이체희망일'],['name
 const isExpPage=k=>(k==='expense'||k==='cardreport');
 let FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};
 let PERIOD='month',PFROM='',PTO=''; // month | ytd | all | custom (기본=이번달)
+let PYM=''; // 선택한 연-월 (YYYY-MM) — 비어있으면 이번달
 function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};_q='';_page=1;}
 /* 컬럼 너비 조절(거래처/예금주 등 첫 열) — 드래그로 조절, localStorage 저장 */
 let COLW=(function(){try{return JSON.parse(localStorage.getItem('fin_colw')||'{}')}catch(e){return {}}})();
@@ -598,7 +599,7 @@ function colwVar(key){return (COLW[key]||300)+'px';}
   document.addEventListener('mousemove',function(e){if(!d)return;var w=Math.max(110,Math.min(680,d.w0+(e.clientX-d.x0)));d.tbl.style.setProperty('--cw',w+'px');COLW[d.key]=w;});
   document.addEventListener('mouseup',function(){if(!d)return;var el=document.querySelector('.rzh.drag');if(el)el.classList.remove('drag');document.body.style.cursor='';try{localStorage.setItem('fin_colw',JSON.stringify(COLW))}catch(e){}d=null;});
 })();
-function inPeriod(d){if(PERIOD==='all')return true;if(!d)return false;const now=today();if(PERIOD==='ytd')return d>=now.slice(0,4)+'-01-01';if(PERIOD==='month')return d.slice(0,7)===now.slice(0,7);if(PERIOD==='custom')return (!PFROM||d>=PFROM)&&(!PTO||d<=PTO);return true;}
+function inPeriod(d){if(PERIOD==='all')return true;if(!d)return false;const now=today();if(PERIOD==='ytd')return d>=now.slice(0,4)+'-01-01';if(PERIOD==='month')return d.slice(0,7)===(PYM||now.slice(0,7));if(PERIOD==='custom')return (!PFROM||d>=PFROM)&&(!PTO||d<=PTO);return true;}
 function roleScope(arr){if(IS_SUPA)return arr.slice();/* 실모드는 서버 RLS가 가시성 처리 */if(canViewAll())return arr.slice();if(ROLE==='lead')return arr.filter(r=>r.team===ME().team);return arr.filter(r=>r.requester===ME().name);}
 function visible(arr,kind){
   let list=roleScope(arr);
@@ -743,17 +744,24 @@ function toggleSel(id){_sel.has(id)?_sel.delete(id):_sel.add(id);render();}
 function toggleAll(page){const list=visible(page==='payout'?DB.payout:DB.invoice,page);const ids=list.map(r=>r.id);_sel=new Set(ids.every(i=>_sel.has(i))?[]:ids);render();}
 /* ===================== 대시보드 ===================== */
 function setPeriod(p){PERIOD=p;render();}
-function periodSel(){return `<div class="seg"><button class="${PERIOD==='month'?'on':''}" onclick="setPeriod('month')">${parseInt(today().slice(5,7),10)}월</button><button class="${PERIOD==='ytd'?'on':''}" onclick="setPeriod('ytd')">올해</button><button class="${PERIOD==='all'?'on':''}" onclick="setPeriod('all')">전체</button><button class="${PERIOD==='custom'?'on':''}" onclick="setPeriod('custom')">기간지정</button></div>${PERIOD==='custom'?`<div class="seg-range"><input type="date" value="${PFROM}" onchange="PFROM=this.value;render()"><span>~</span><input type="date" value="${PTO}" onchange="PTO=this.value;render()"></div>`:''}`;}
+function setPYMPart(k,v){const cur=PYM||today().slice(0,7);const y=k==='y'?v:cur.slice(0,4);const m=k==='m'?v:String(parseInt(cur.slice(5,7),10));PYM=y+'-'+String(m).padStart(2,'0');PERIOD='month';render();}
+function periodSel(){
+  const cur=PYM||today().slice(0,7);const py=+cur.slice(0,4),pm=+cur.slice(5,7);const curY=+today().slice(0,4);
+  let ys='';for(let y=2024;y<=curY+1;y++)ys+=`<option value="${y}" ${y===py?'selected':''}>${y}년</option>`;
+  let ms='';for(let m=1;m<=12;m++)ms+=`<option value="${m}" ${m===pm?'selected':''}>${m}월</option>`;
+  const monthLbl=(py===curY?'':String(py).slice(2)+'년 ')+pm+'월';
+  return `<div class="seg"><button class="${PERIOD==='month'?'on':''}" onclick="setPeriod('month')">${monthLbl}</button><button class="${PERIOD==='ytd'?'on':''}" onclick="setPeriod('ytd')">올해</button><button class="${PERIOD==='all'?'on':''}" onclick="setPeriod('all')">전체</button><button class="${PERIOD==='custom'?'on':''}" onclick="setPeriod('custom')">기간지정</button></div>${PERIOD==='month'?`<div class="seg-range"><select onchange="setPYMPart('y',this.value)">${ys}</select><select onchange="setPYMPart('m',this.value)">${ms}</select></div>`:''}${PERIOD==='custom'?`<div class="seg-range"><input type="date" value="${PFROM}" onchange="PFROM=this.value;render()"><span>~</span><input type="date" value="${PTO}" onchange="PTO=this.value;render()"></div>`:''}`;}
 function fmtCur(list){const m={};list.forEach(r=>{if(r.unit&&r.unit!=='원')m[r.unit]=(m[r.unit]||0)+r.amount;});return Object.entries(m).map(([u,v])=>` · ${u} ${won(v)}`).join('');}
 function payoutSumBar(list){
-  /* 당월 합계 — 표시 기간과 무관하게 이번 달 기준, 매월 1일 자동 갱신 */
-  const ym=today().slice(0,7);const mon=parseInt(ym.slice(5,7),10);
+  /* 월 합계 — 월 선택 시 그 달, 그 외엔 이번 달 기준 */
+  const ym=(PERIOD==='month'&&PYM)?PYM:today().slice(0,7);const mon=parseInt(ym.slice(5,7),10);
+  const yPre=ym.slice(0,4)===today().slice(0,4)?'':ym.slice(2,4)+'년 ';
   const monthRows=DB.payout.filter(r=>r.unit==='원'&&(r.applied||'').slice(0,7)===ym&&r.status!=='canceled'&&r.status!=='rejected');
   const monthSum=monthRows.reduce((s,r)=>s+r.amount,0);
   const pendAll=DB.payout.filter(r=>r.status==='requested');
   const pendKrw=pendAll.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);
   return `<div class="statrow">
-    <div class="stat"><span class="sl">${mon}월 이체 합계 (당월)</span><span class="sv">${won(monthSum)}원<small>${monthRows.length}건</small></span></div>
+    <div class="stat"><span class="sl">${yPre}${mon}월 이체 합계</span><span class="sv">${won(monthSum)}원<small>${monthRows.length}건</small></span></div>
     <div class="stat o"><span class="sl">미지급 대기 (전체)</span><span class="sv">${won(pendKrw)}원<small>${pendAll.length}건</small></span></div>
     <div class="stat b"><span class="sl">표시 건수</span><span class="sv">${list.length}건</span></div>
     <div class="statx"><button class="btn btn-line" onclick="exportPayoutList()">${I.download}<span>엑셀 다운로드</span></button></div>
