@@ -1581,7 +1581,8 @@ function initColResize(key){
     if(w)col.style.width=w+'px';
     else if(!label)col.style.width=(i===0&&canApprove())?'36px':'80px';
     cg.appendChild(col);
-    if(label&&defs[label]){
+    /* 크기조절 핸들은 정채영만 표시 */
+    if(label&&defs[label]&&canManageAll()){
       const hd=document.createElement('span');hd.className='colrz';th.appendChild(hd);
       hd.addEventListener('click',e=>e.stopPropagation());
       hd.addEventListener('mousedown',e=>{
