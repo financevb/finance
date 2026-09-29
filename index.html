@@ -971,8 +971,6 @@ function openPayoutForm(seed){
       <div class="form-row" id="f_proofUrlRow" style="display:none;margin-bottom:0"><label id="f_proofUrlLbl">증빙 링크 (Dropbox)<span class="hint">선택</span></label><input class="input" id="f_evidence" value="${escH(seed.evidence||'')}" placeholder="https://www.dropbox.com/..."></div>
       <div class="form-row" id="f_proofNoneRow" style="display:none;margin-bottom:0"><label>증빙 없음 사유 <span class="req">*</span></label><input class="input" id="f_proofreason" value="${escH(seed.proofReason||'')}" placeholder="예: 급여·인건비 / 해외송금 / 공과금 / 경조사비"></div>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--gray-700);margin-top:8px"><input type="checkbox" class="cbx" id="f_recur" onchange="var n=document.getElementById('f_recurBox');n.style.display=this.checked?'block':'none'">🔁 매월 정기 이체로 등록</label>
-    <div class="form-row" id="f_recurBox" style="display:none;margin-top:8px"><label>반복 횟수(총 N회) <span class="hint">이번 건 포함</span></label><input class="input num" id="f_recurN" value="3"></div>
     <div id="f_anom" style="margin-top:10px"></div>
   `,`<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="submitPayout()">${seed.editId?'수정 저장':'요청 등록'}</button>`);
   if(seed.unit)document.getElementById('f_unit').value=seed.unit;
@@ -1054,7 +1052,7 @@ function submitPayout(){
   if(pt==='none'&&!r.proofReason){toast('증빙 없음 사유를 적어주세요.','err');return;}
   if(isLockedMonth(today())){toast(today().slice(0,7)+'은 마감되어 신청할 수 없어요.','err');return;}
   r.approver=approverFor(r.requester,r.amount);
-  const recur=document.getElementById('f_recur').checked,total=Math.max(1,numVal('f_recurN')||1);
+  const _recEl=document.getElementById('f_recur');const recur=!!(_recEl&&_recEl.checked),total=Math.max(1,numVal('f_recurN')||1);
   const editId=_editPayoutId;
   const warns=scanPayout(r,editId).filter(f=>f.s==='warn');
   const go=()=>{
