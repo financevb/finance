@@ -846,8 +846,8 @@ function renderPayout(){
   const pageList=list.slice((_page-1)*PAGE_N,_page*PAGE_N);
   const rowStart=(_page-1)*PAGE_N;
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-payout"><thead><tr>';
-  h+=`<th class="mhide" style="width:42px">#</th>`;
-  if(mineApprove)h+=`<th class="mhide" style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('payout')"></th>`;
+  h+=`<th class="mhide">#</th>`;
+  if(mineApprove)h+=`<th class="mhide"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('payout')"></th>`;
   h+=`<th class="sortable mhide" onclick="setSort('payout','date')">이체요청일${sortIcon('payout','date')}</th><th class="sortable mhide" onclick="setSort('payout','due')">이체희망일${sortIcon('payout','due')}</th><th class="mhide">신청인</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('payout','name')">거래처${sortIcon('payout','name')}</th><th class="mhide">적요</th><th class="mhide">분류</th><th class="mhide">은행</th><th class="mhide">계좌번호</th><th class="sortable" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
   pageList.forEach((r,_i)=>{
     const st=PSTATUS[r.status]||['?',''];const flags=r.status==='requested'?scanPayout(r):[];
@@ -1523,8 +1523,8 @@ function renderInvoice(){
   const ipageList=list.slice((_page-1)*PAGE_N,_page*PAGE_N);
   const irowStart=(_page-1)*PAGE_N;
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-invoice"><thead><tr>';
-  h+=`<th class="mhide" style="width:42px">#</th>`;
-  if(mineApprove)h+=`<th style="width:36px"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('invoice')"></th>`;
+  h+=`<th class="mhide">#</th>`;
+  if(mineApprove)h+=`<th><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('invoice')"></th>`;
   h+=`<th class="sortable" onclick="setSort('invoice','date')">요청일${sortIcon('invoice','date')}</th><th class="mhide">요청자</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('invoice','name')">상호${sortIcon('invoice','name')}</th><th class="mhide">사업자번호</th><th class="mhide">이메일</th><th class="sortable mhide" onclick="setSort('invoice','writeDate')">작성일${sortIcon('invoice','writeDate')}</th><th>품목명</th><th class="mhide">유형</th><th class="mhide">공급가액</th><th class="mhide">부가세액</th><th class="sortable" onclick="setSort('invoice','amount')">합계${sortIcon('invoice','amount')}</th><th class="mhide">실제입금액</th><th class="mhide">내용</th><th class="mhide">발급일</th><th>상태</th><th>입금확인</th><th></th></tr></thead><tbody>`;
   ipageList.forEach((r,_i)=>{const st=ISTATUS[r.status];
     h+=`<tr class="rowclk" onclick="viewInvoice('${r.id}')">`;
@@ -1556,8 +1556,8 @@ function renderInvoice(){
 }
 /* 표 열 너비 드래그 조절 (공용) — localStorage 저장, 열 제목 기준 */
 const COLW_DEF={
-  invoice:{'요청일':92,'요청자':70,'팀':64,'상호':160,'사업자번호':104,'이메일':170,'작성일':92,'품목명':200,'유형':54,'공급가액':94,'부가세액':88,'합계':100,'실제입금액':96,'내용':130,'발급일':88,'상태':92,'입금확인':106},
-  payout:{'이체요청일':138,'이체희망일':96,'신청인':70,'팀':62,'거래처':150,'적요':210,'분류':96,'은행':86,'계좌번호':128,'금액':100,'이상·고액':96,'증빙/비고':82,'상태':100}
+  invoice:{'#':42,'_cb':36,'요청일':92,'요청자':70,'팀':64,'상호':160,'사업자번호':104,'이메일':170,'작성일':92,'품목명':200,'유형':54,'공급가액':94,'부가세액':88,'합계':100,'실제입금액':96,'내용':130,'발급일':88,'상태':92,'입금확인':106},
+  payout:{'#':42,'_cb':36,'이체요청일':138,'이체희망일':96,'신청인':70,'팀':62,'거래처':150,'적요':210,'분류':96,'은행':86,'계좌번호':128,'금액':100,'이상·고액':96,'증빙/비고':82,'상태':100}
 };
 function initColResize(key){
   const tbl=document.querySelector('#content table.rsz-'+key);if(!tbl||tbl._rszDone)return;tbl._rszDone=true;
@@ -1565,9 +1565,10 @@ function initColResize(key){
   let saved={};try{saved=JSON.parse(localStorage.getItem(storeKey)||'{}')||{};}catch(e){saved={};}
   const defs=COLW_DEF[key]||{};
   const ths=[...tbl.querySelectorAll('thead th')];
+  const labelOf=th=>{const t=th.textContent.replace(/[▲▼\s]/g,'');if(t)return t;return th.querySelector('input.cbx')?'_cb':'';};
   const cg=document.createElement('colgroup');
   ths.forEach((th,i)=>{
-    const label=th.textContent.replace(/[▲▼\s]/g,'');
+    const label=labelOf(th);
     const col=document.createElement('col');
     const w=saved[label]||defs[label];
     if(w)col.style.width=w+'px';
@@ -1585,11 +1586,12 @@ function initColResize(key){
         let total=rendered.reduce((s,w2)=>s+w2,0);
         tbl.style.width=total+'px';
         const startX=e.clientX,startW=rendered[i];
-        const mv=ev=>{const w2=Math.max(42,startW+ev.clientX-startX);col.style.width=w2+'px';tbl.style.width=(total-startW+w2)+'px';};
+        const minW=(label==='#'||label==='_cb')?26:42;
+        const mv=ev=>{const w2=Math.max(minW,startW+ev.clientX-startX);col.style.width=w2+'px';tbl.style.width=(total-startW+w2)+'px';};
         const up=ev=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);hd.classList.remove('drag');
           /* 고정된 모든 열 너비 저장 (다음 렌더에서 그대로 복원) */
           const ths2=[...tbl.querySelectorAll('thead th')];
-          cols.forEach((c2,j)=>{const lb=ths2[j]?ths2[j].textContent.replace(/[▲▼\s]/g,''):'';if(lb&&defs[lb])saved[lb]=Math.max(42,Math.round(c2.getBoundingClientRect().width));});
+          cols.forEach((c2,j)=>{const lb=ths2[j]?labelOf(ths2[j]):'';if(lb&&defs[lb])saved[lb]=Math.max((lb==='#'||lb==='_cb')?26:42,Math.round(c2.getBoundingClientRect().width));});
           try{localStorage.setItem(storeKey,JSON.stringify(saved));}catch(e2){}};
         document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
       });
