@@ -724,7 +724,7 @@ function render(){
   const p=PAGES[current];
   document.getElementById('pgTitle').textContent=p.t;document.getElementById('pgDesc').textContent=p.d;
   let act='';
-  if(current==='payout')act=`<button class="btn btn-line" onclick="openTemplates()">정기</button><button class="btn btn-line" onclick="openWHForm()">3.3% 지급</button><button class="btn btn-line" onclick="openBulkForm()">일괄</button><button class="btn btn-primary" onclick="openPayoutForm()">${I.plus}<span>새 이체 요청</span></button>`;
+  if(current==='payout')act=`<button class="btn btn-line" onclick="openWHForm()">3.3% 지급</button><button class="btn btn-line" onclick="openBulkForm()">일괄</button><button class="btn btn-primary" onclick="openPayoutForm()">${I.plus}<span>새 이체 요청</span></button>`;
   if(current==='fuel')act=`<button class="btn btn-primary" onclick="openFuelForm()">${I.car}<span>유류비 신청</span></button>`;
   if(current==='expense')act=`<button class="btn btn-primary" onclick="openExpenseForm()">${I.plus}<span>지출결의 등록</span></button>`;
   if(current==='cardreport')act=`<button class="btn btn-line btn-sm" onclick="openCardBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openCardForm()">${I.plus}<span>기명 법카 신고</span></button>`;
