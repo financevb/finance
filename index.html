@@ -874,6 +874,27 @@ function invoiceSumBar(list){const supply=list.reduce((s,r)=>s+r.supply,0),vat=l
     <div class="statx"><button class="btn btn-line" onclick="exportInvoiceList()">${I.download}<span>엑셀 다운로드</span></button></div>
   </div>`;}
 function todoBanner(){const pend=DB.payout.filter(r=>r.status==='requested');const pendKrw=pend.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);const now=new Date(today());const due=DB.invoice.filter(r=>{if(r.status!=='requested')return false;const dl=invoiceDeadline(r.writeDate);if(!dl)return false;return Math.round((dl-now)/86400000)<=3;});const overdue=due.filter(r=>(invoiceDeadline(r.writeDate)-now)<0).length;const proofOver=DB.payout.filter(r=>r.status==='paid'&&proofOverdue(r));const expPend=canApprove()?DB.expense.filter(r=>r.status==='requested'):[];const cardPend=expPend.filter(r=>r.method==='named_card').length;const genPend=expPend.length-cardPend;if(!pend.length&&!due.length&&!proofOver.length&&!expPend.length)return `<div class="todo ok">✅ 오늘 처리할 미지급·발행 항목이 없어요.</div>`;let it=[];if(pend.length)it.push(`<button class="todo-item" onclick="current='payout';clearFilter();FILTER.statuses=new Set(['requested']);render()"><b>${pend.length}건</b> 미지급 대기 · <span>${won(pendKrw)}원</span></button>`);if(due.length)it.push(`<button class="todo-item warn" onclick="current='invoice';clearFilter();_sort.invoice={k:'writeDate',dir:1};render()"><b>${due.length}건</b> 세금계산서 발행기한 임박${overdue?' (기한 지남 '+overdue+')':''}</button>`);if(proofOver.length)it.push(`<button class="todo-item warn" onclick="go('proof')"><b>${proofOver.length}건</b> 증빙 미수취 (발행기한 경과)</button>`);if(genPend)it.push(`<button class="todo-item" onclick="go('expense')"><b>${genPend}건</b> 지출결의 대기</button>`);if(cardPend)it.push(`<button class="todo-item" onclick="go('cardreport')"><b>${cardPend}건</b> 기명 법카 확인 대기</button>`);return`<div class="todo"><span class="todo-h">📌 오늘 할 일</span>${it.join('')}</div>`;}
+/* 엑셀 임포트 건 작성자 계정 연결 — 정채영 전용 버튼으로 실행
+   사이트에서 직접 등록해본 팀원(이름↔이메일 확인됨)의 임포트 건을 본인 계정 소유로 변경 */
+async function ownerSync(){
+  if(!canManageAll()||!IS_SUPA)return;
+  toast('작성자 계정 확인 중…','ok');
+  const MYE='cy.j@villagebaby.kr';
+  const map={};
+  const harvest=rs=>(rs||[]).forEach(r=>{const n=(r.requester_name||'').trim(),e=(r.requester_email||'').trim().toLowerCase();if(n&&e&&e!==MYE&&!map[n])map[n]=e;});
+  const {data:iv}=await sb.from('fin_invoices').select('requester_name,requester_email');harvest(iv);
+  const {data:po}=await sb.from('fin_payouts').select('requester_name,requester_email');harvest(po);
+  delete map['정채영'];
+  let inv=0,pay=0;const errs=[];
+  for(const [name,email] of Object.entries(map)){
+    const {data:d1,error:e1}=await sb.from('fin_invoices').update({requester_email:email}).eq('requester_email',MYE).eq('requester_name',name).select('id');
+    if(e1)errs.push(name);else inv+=(d1||[]).length;
+    const {data:d2,error:e2}=await sb.from('fin_payouts').update({requester_email:email}).eq('requester_email',MYE).eq('requester_name',name).select('id');
+    if(e2)errs.push(name);else pay+=(d2||[]).length;
+  }
+  await loadData();render();
+  toast('작성자 연결 완료 — 이체 '+pay+'건 · 계산서 '+inv+'건'+(errs.length?' · 실패: '+errs.join(','):''),'ok');
+}
 function renderDashboard(){
   const c=document.getElementById('content');
   const EXCLUDE_TEAMS=new Set(['사채업자','글로벌','앱팀 (재미팀)','앱 (재미)']);
@@ -890,7 +911,7 @@ function renderDashboard(){
   const teamArr=Object.entries(teams).sort((a,b)=>b[1].sum-a[1].sum);const tmax=Math.max(1,...teamArr.map(t=>t[1].sum));
   const vend={};krw.forEach(r=>{(vend[r.payee]=vend[r.payee]||0);vend[r.payee]+=r.amount;});
   const vtop=Object.entries(vend).sort((a,b)=>b[1]-a[1]).slice(0,5);const vmax=Math.max(1,...vtop.map(v=>v[1]));
-  let h=todoBanner()+`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">${periodSel().replace(/ style="margin-bottom:14px"/,'')}${canApprove()?`<button class="btn btn-sm ${LOCKED.has(today().slice(0,7))?'btn-danger':'btn-secondary'}" onclick="toggleLock('${today().slice(0,7)}')">${LOCKED.has(today().slice(0,7))?'🔒 '+today().slice(0,7)+' 마감됨 — 해제':today().slice(0,7)+' 마감하기'}</button>`:''}</div>`;
+  let h=todoBanner()+`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">${periodSel().replace(/ style="margin-bottom:14px"/,'')}${canApprove()?`<button class="btn btn-sm ${LOCKED.has(today().slice(0,7))?'btn-danger':'btn-secondary'}" onclick="toggleLock('${today().slice(0,7)}')">${LOCKED.has(today().slice(0,7))?'🔒 '+today().slice(0,7)+' 마감됨 — 해제':today().slice(0,7)+' 마감하기'}</button>`:''}${canManageAll()?`<button class="btn btn-sm btn-line" onclick="ownerSync()" title="엑셀에서 가져온 건들을 실제 작성자 계정과 연결해요 (작성자가 사이트에 한 번이라도 직접 등록한 적 있어야 연결 가능). 새 팀원이 사이트를 쓰기 시작하면 다시 눌러주세요.">👥 임포트 건 작성자 연결</button>`:''}</div>`;
   h+=`<div class="kpis dash">
     <div class="kpi blue click" onclick="landing('payout',{})"><div class="lbl">이체 요청(원화 합계)</div><div class="val">${won(totalAmt)}<span style="font-size:13px">원</span></div></div>
     <div class="kpi orange click" onclick="landing('payout',{status:'requested'})"><div class="lbl">지급 대기</div><div class="val">${pending.length}건</div></div>
