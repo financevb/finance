@@ -1130,7 +1130,22 @@ function addMemo(id){const el=document.getElementById('memo_in_'+id);const body=
   sv('fin_add_memo',{p_payout_id:id,p_body:body},()=>{(MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body:body,at:today()+' '+new Date().toTimeString().slice(0,5)});}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(id);toast('메모를 추가했어요.','ok');});}
 function delMemo(mid,pid){sv('fin_del_memo',{p_id:mid},()=>{MEMOS[pid]=(MEMOS[pid]||[]).filter(m=>m.id!==mid);}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(pid);toast('메모를 삭제했어요.');});}
 /* 지급완료 처리 시각·처리자 자동 기록 (관리자 메모로 서버 저장) */
+/* 지급완료 메일 알림 — 구글 앱스 스크립트 웹훅 (비어 있으면 발송 안 함) */
+const NOTIFY_URL='';
+const NOTIFY_SECRET='vbfin-2026-mail';
+function notifyPaid(id){
+  try{
+    if(!NOTIFY_URL||!IS_SUPA)return;
+    const r=DB.payout.find(x=>x.id===id);if(!r)return;
+    const to=String(r.requesterEmail||'').trim().toLowerCase();
+    /* 회사 메일로만, 재무 계정(임포트 건 소유)·본인 처리 건은 제외 */
+    if(!/^[a-z0-9._%+-]+@villagebaby\.kr$/.test(to)||to==='cy.j@villagebaby.kr')return;
+    fetch(NOTIFY_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:NOTIFY_SECRET,to,name:r.requester||'',payee:r.payee||'',amount:won(r.amount)+(r.unit==='원'?'원':' '+r.unit),date:today(),purpose:purposeText(r)||''})}).catch(()=>{});
+    sb.from('fin_payouts').update({notified_at:new Date().toISOString()}).eq('id',id).then(()=>{});
+  }catch(e){}
+}
 function _paidStamp(id){
+  notifyPaid(id);
   const body='🕒 지급완료 처리 · '+fmtTs(new Date().toISOString())+' · '+ME().name;
   if(IS_SUPA)return sb.rpc('fin_add_memo',{p_payout_id:id,p_body:body});
   (MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body,at:fmtTs(new Date().toISOString()).slice(0,16)});
@@ -2048,7 +2063,7 @@ async function loadMe(){
   SUPA_USER={email,role,name,team,av:(name||'·').slice(0,1),rl:roleLabel(role)};ROLE=role;
 }
 function fmtTs(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
-function _mapPayout(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:r.evidence_url,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
+function _mapPayout(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:r.evidence_url,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
 function _mapInvoice(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:r.evidence_url,status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||''};}
 function _mapCoupon(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,name:r.recipient_name,phone:r.recipient_phone,phoneNorm:r.recipient_phone_norm,amount:Number(r.amount)||0,code:r.code||'',status:r.status,hold:r.hold_reason||'',isOverride:r.is_override,memo:r.memo||'',createdAt:(r.created_at||'').slice(0,10)};}
 function _mapExpense(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
