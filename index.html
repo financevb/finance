@@ -810,10 +810,11 @@ async function ownerSync(){
   const {data:po}=await sb.from('fin_payouts').select('requester_name,requester_email');harvest(po);
   delete map['정채영'];
   let inv=0,pay=0;const errs=[];
+  const ORPHAN='requester_email.is.null,requester_email.eq.,requester_email.eq.'+MYE; /* 빈 소유자·재무 계정 소유 건 모두 대상 */
   for(const [name,email] of Object.entries(map)){
-    const {data:d1,error:e1}=await sb.from('fin_invoices').update({requester_email:email}).eq('requester_email',MYE).eq('requester_name',name).select('id');
+    const {data:d1,error:e1}=await sb.from('fin_invoices').update({requester_email:email}).eq('requester_name',name).or(ORPHAN).select('id');
     if(e1)errs.push(name);else inv+=(d1||[]).length;
-    const {data:d2,error:e2}=await sb.from('fin_payouts').update({requester_email:email}).eq('requester_email',MYE).eq('requester_name',name).select('id');
+    const {data:d2,error:e2}=await sb.from('fin_payouts').update({requester_email:email}).eq('requester_name',name).or(ORPHAN).select('id');
     if(e2)errs.push(name);else pay+=(d2||[]).length;
   }
   await loadData();render();
