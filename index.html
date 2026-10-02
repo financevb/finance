@@ -371,8 +371,12 @@ const ISTATUS={requested:['발행대기','badge-pending'],issued:['발행완료'
 /* 입금확인·실제입금액·내용 — 서버에 저장 칸이 없어 이 브라우저(localStorage)에 저장. {세금계산서id:{d:입금일,amt:실제입금액,note:내용}} */
 let DEPOSITS={};try{DEPOSITS=JSON.parse(localStorage.getItem('fin_deposit_marks')||'{}')||{};}catch(e){DEPOSITS={};}
 function saveDeposits(){try{localStorage.setItem('fin_deposit_marks',JSON.stringify(DEPOSITS));}catch(e){}}
-function depData(id){const v=DEPOSITS[id];if(!v)return {};if(typeof v==='string')return {d:v};return v;} /* 구버전(날짜 문자열) 호환 */
+function depData(id){const v=DEPOSITS[id];const o=(!v)?{}:(typeof v==='string'?{d:v}:Object.assign({},v)); /* 구버전(날짜 문자열) 호환 */
+  if(!o.d){const inv=(DB.invoice||[]).find(x=>x.id===id);if(inv&&inv.paidConfirm)o.d=inv.paidConfirm;} /* 서버 저장 입금일 우선 반영 */
+  return o;}
 function depositOf(id){return depData(id).d||'';}
+/* 입금일을 서버(paid_confirm_date)에도 저장 — 모든 사용자 화면에 반영 */
+function _pushDepDate(id,d){if(!IS_SUPA)return;sb.from('fin_invoices').update({paid_confirm_date:d||null}).eq('id',id).then(()=>{const inv=DB.invoice.find(x=>x.id===id);if(inv)inv.paidConfirm=d||'';});}
 /* ── 지출결의 / 기명 법인카드 신고 ── */
 const ESTATUS={requested:['결의 대기','badge-pending'],confirmed:['결의 완료','badge-paid'],rejected:['반려','badge-rejected'],canceled:['철회','badge-canceled']};
 /* 기명 법카(named_card)는 별도 탭이라 지출결의 폼의 선택지에서는 뺀다 */
@@ -1739,9 +1743,10 @@ function openDepositForm(id){
 function saveDepositForm(id){
   const d=val('dep_date')||'';const amt=numVal('dep_amt')||0;const note=(val('dep_note')||'').trim();
   if(!d&&!amt&&!note){delete DEPOSITS[id];}else{DEPOSITS[id]={d,amt,note};}
+  _pushDepDate(id,d);
   saveDeposits();closeModal();render();toast(d?'입금확인 저장했어요. ('+d+')':'메모를 저장했어요.','ok');
 }
-function clearDeposit(id){delete DEPOSITS[id];saveDeposits();closeModal();render();toast('입금확인·메모를 삭제했어요.');}
+function clearDeposit(id){delete DEPOSITS[id];_pushDepDate(id,'');saveDeposits();closeModal();render();toast('입금확인·메모를 삭제했어요.');}
 /* 입금확인 엑셀 가져오기 — 세금계산서 시트에서 입금일·실제입금액·내용을 읽어 발행 건과 매칭 */
 function openDepositImport(){
   if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}
@@ -1883,6 +1888,7 @@ function runDepositImport(){
       if(!v)return;
       used.add(v.id);
       DEPOSITS[v.id]={d:rc.dep||'',amt:rc.amt||0,note:rc.note||''};
+      if(rc.dep)_pushDepDate(v.id,rc.dep);
       hit++;
     });
     saveDeposits();render();
@@ -1890,7 +1896,7 @@ function runDepositImport(){
     toast(hit+'건 입금확인 정보를 가져왔어요.','ok');
   }).catch(e=>{out.textContent='파일을 읽지 못했어요: '+((e&&e.message)||e);});
 }
-function batchDeposit(){if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!depositOf(r.id));if(!ss.length){toast('선택한 항목이 이미 모두 입금확인 상태예요.','err');return;}const d=today();ss.forEach(r=>{const c=depData(r.id);DEPOSITS[r.id]={d,amt:c.amt||0,note:c.note||''};});saveDeposits();_sel=new Set();render();toast(ss.length+'건 입금확인 표시. ('+d+')','ok');}
+function batchDeposit(){if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!depositOf(r.id));if(!ss.length){toast('선택한 항목이 이미 모두 입금확인 상태예요.','err');return;}const d=today();ss.forEach(r=>{const c=depData(r.id);DEPOSITS[r.id]={d,amt:c.amt||0,note:c.note||''};_pushDepDate(r.id,d);});saveDeposits();_sel=new Set();render();toast(ss.length+'건 입금확인 표시. ('+d+')','ok');}
 function batchInvoice(status){const ss=DB.invoice.filter(r=>_sel.has(r.id)&&r.status==='requested');if(!ss.length){toast('선택한 항목 중 발행대기 건이 없어요.','err');return;}if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_invoice',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리.','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='issued';});_sel=new Set();render();toast(ss.length+'건 처리.','ok');}}
 function exportInvoiceRows(ss,fname){loadXLSX().then(function(){const head=['요청일','요청자','소속팀','사업자등록번호(공급받는자)','상호','이메일(공급받는자)','계산서작성일','품목명','유형','공급가액','부가세액','세금계산서합계','실제입금액','내용','계산서발급일','상태','입금확인'];const data=ss.map(r=>{const dd=depData(r.id);return [r.applied,r.requester,normalizeTeam(r.team)||'',r.bizNo,r.company,r.email,r.writeDate,r.itemName,r.saleType,r.supply,r.tax,r.total,dd.amt||'',dd.note||'',r.issuedAt||'',(ISTATUS[r.status]||['?'])[0],dd.d||''];});const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:11},{wch:8},{wch:9},{wch:16},{wch:20},{wch:24},{wch:11},{wch:26},{wch:6},{wch:12},{wch:11},{wch:13},{wch:12},{wch:26},{wch:11},{wch:9},{wch:11}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'세금계산서');XLSX.writeFile(wb,fname);toast(ss.length+'건 엑셀 다운로드.','ok');}).catch(()=>toast('엑셀 로드 실패','err'));}
 function exportInvoice(){const ss=DB.invoice.filter(r=>_sel.has(r.id));if(!ss.length){toast('항목을 선택하세요.','err');return;}exportInvoiceRows(ss,'세금계산서_선택_'+today()+'.xlsx');}
@@ -2065,7 +2071,7 @@ async function loadMe(){
 }
 function fmtTs(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
 function _mapPayout(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:r.evidence_url,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
-function _mapInvoice(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:r.evidence_url,status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||''};}
+function _mapInvoice(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:r.evidence_url,status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||'',paidConfirm:r.paid_confirm_date||''};}
 function _mapCoupon(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,name:r.recipient_name,phone:r.recipient_phone,phoneNorm:r.recipient_phone_norm,amount:Number(r.amount)||0,code:r.code||'',status:r.status,hold:r.hold_reason||'',isOverride:r.is_override,memo:r.memo||'',createdAt:(r.created_at||'').slice(0,10)};}
 function _mapExpense(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
 async function fetchAllRows(factory){const PAGE=1000;let from=0,all=[];for(;;){const{data,error}=await factory().range(from,from+PAGE-1);if(error)throw error;all=all.concat(data||[]);if(!data||data.length<PAGE)break;from+=PAGE;}return all;}
