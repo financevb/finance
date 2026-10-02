@@ -1131,7 +1131,7 @@ function addMemo(id){const el=document.getElementById('memo_in_'+id);const body=
 function delMemo(mid,pid){sv('fin_del_memo',{p_id:mid},()=>{MEMOS[pid]=(MEMOS[pid]||[]).filter(m=>m.id!==mid);}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(pid);toast('메모를 삭제했어요.');});}
 /* 지급완료 처리 시각·처리자 자동 기록 (관리자 메모로 서버 저장) */
 /* 지급완료 메일 알림 — 구글 앱스 스크립트 웹훅 (비어 있으면 발송 안 함) */
-const NOTIFY_URL='';
+const NOTIFY_URL='https://script.google.com/macros/s/AKfycbzxMuw3PddqHEIORhS8EUvhl6GL8AhQE4OfcAh-7Ys-cKfbIak32QZ6jFYm4BD4kRc75w/exec';
 const NOTIFY_SECRET='vbfin-2026-mail';
 function notifyPaid(id){
   try{
