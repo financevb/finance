@@ -371,12 +371,18 @@ const ISTATUS={requested:['발행대기','badge-pending'],issued:['발행완료'
 /* 입금확인·실제입금액·내용 — 서버에 저장 칸이 없어 이 브라우저(localStorage)에 저장. {세금계산서id:{d:입금일,amt:실제입금액,note:내용}} */
 let DEPOSITS={};try{DEPOSITS=JSON.parse(localStorage.getItem('fin_deposit_marks')||'{}')||{};}catch(e){DEPOSITS={};}
 function saveDeposits(){try{localStorage.setItem('fin_deposit_marks',JSON.stringify(DEPOSITS));}catch(e){}}
+/* 입금액·내용은 evidence_url 칸에 '#D{json}#D원래링크' 형태로 함께 저장 (서버 전용 칸이 없어서) */
+function _depExtra(ev){const m=String(ev||'').match(/^#D(\{[\s\S]*?\})#D([\s\S]*)$/);if(!m)return {url:ev||''};try{const j=JSON.parse(m[1]);return {a:Number(j.a)||0,n:j.n||'',url:m[2]||''};}catch(e){return {url:ev||''};}}
 function depData(id){const v=DEPOSITS[id];const o=(!v)?{}:(typeof v==='string'?{d:v}:Object.assign({},v)); /* 구버전(날짜 문자열) 호환 */
-  if(!o.d){const inv=(DB.invoice||[]).find(x=>x.id===id);if(inv&&inv.paidConfirm)o.d=inv.paidConfirm;} /* 서버 저장 입금일 우선 반영 */
+  const inv=(DB.invoice||[]).find(x=>x.id===id);
+  if(inv){if(!o.d&&inv.paidConfirm)o.d=inv.paidConfirm;if(!o.amt&&inv.depAmt)o.amt=inv.depAmt;if(!o.note&&inv.depNote)o.note=inv.depNote;} /* 서버 저장값 반영 */
   return o;}
 function depositOf(id){return depData(id).d||'';}
-/* 입금일을 서버(paid_confirm_date)에도 저장 — 모든 사용자 화면에 반영 */
-function _pushDepDate(id,d){if(!IS_SUPA)return;sb.from('fin_invoices').update({paid_confirm_date:d||null}).eq('id',id).then(()=>{const inv=DB.invoice.find(x=>x.id===id);if(inv)inv.paidConfirm=d||'';});}
+/* 입금일·입금액·내용을 서버에도 저장 — 모든 사용자 화면에 반영 */
+function _pushDep(id,d,amt,note){if(!IS_SUPA)return;
+  const inv=DB.invoice.find(x=>x.id===id);const url=inv?(inv.evidence||''):'';
+  const ev=((amt||note)?('#D'+JSON.stringify({a:amt||0,n:note||''})+'#D'):'')+url;
+  sb.from('fin_invoices').update({paid_confirm_date:d||null,evidence_url:ev}).eq('id',id).then(()=>{if(inv){inv.paidConfirm=d||'';inv.depAmt=amt||0;inv.depNote=note||'';}});}
 /* ── 지출결의 / 기명 법인카드 신고 ── */
 const ESTATUS={requested:['결의 대기','badge-pending'],confirmed:['결의 완료','badge-paid'],rejected:['반려','badge-rejected'],canceled:['철회','badge-canceled']};
 /* 기명 법카(named_card)는 별도 탭이라 지출결의 폼의 선택지에서는 뺀다 */
@@ -1658,17 +1664,24 @@ function openInvoiceForm(seed){
     <div class="f2"><div class="form-row"><label>대표자 <span class="req">*</span></label><input class="input" id="i_ceo" value="${escH(seed.ceo||'')}"></div><div class="form-row"><label>이메일 <span class="req">*</span></label><input class="input" id="i_email" value="${escH(seed.email||'')}" placeholder="tax@company.kr"></div></div>
     <div class="f2"><div class="form-row"><label>구분</label><select class="input" id="i_type">${types}</select></div><div class="form-row"><label>작성일자 <span class="req">*</span><span class="hint">매입=이체당일</span></label><input class="input" type="date" id="i_date" value="${seed.writeDate||today()}" onchange="invDeadlineHint()"></div></div>
     <div class="form-row"><label>품목명 <span class="req">*</span></label><input class="input" id="i_item" value="${escH(seed.itemName||'')}"></div>
-    <div class="form-row"><label>공급가액 <span class="req">*</span><span class="hint">세액·합계 자동</span></label><input class="input num" id="i_supply" value="${seed.supply?won(seed.supply):''}" placeholder="0" oninput="this.value=comma(this.value);invVat()"></div>
+    <div class="f2"><div class="form-row"><label>공급가액 <span class="req">*</span></label><input class="input num" id="i_supply" value="${seed.supply?won(seed.supply):''}" placeholder="0" oninput="this.value=comma(this.value);invVat()"></div><div class="form-row"><label>세액<span class="hint">자동 10% · 직접 수정 가능</span></label><input class="input num" id="i_vat" placeholder="0" oninput="this.value=comma(this.value);this.dataset.manual='1';invVat()"></div></div>
     <div class="preview-box" id="i_pv"><span>공급가액 <b id="pv_s">0</b></span><span>세액 <b id="pv_t">0</b></span><span>합계 <b id="pv_tot">0</b></span></div>
     <div class="form-row" style="margin-top:14px"><label>증빙 (Dropbox 링크)<span class="hint">선택</span></label><input class="input" id="i_evidence" value="${escH(seed.evidence||'')}" placeholder="https://www.dropbox.com/..."></div>
     <div id="i_dl"></div>
   `,`<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="submitInvoice()">${seed.editId?'수정 저장':'요청 등록'}</button>`);
-  invVat();invDeadlineHint();
+  invVat();
+  /* 수정 모드에서 세액이 자동값(10%)과 다르면 수기값으로 유지 */
+  if(seed.tax!==undefined&&seed.tax!==null&&seed.tax!==''){const auto=Math.round((seed.supply||0)*0.1);if(Number(seed.tax)!==auto){const v=document.getElementById('i_vat');if(v){v.dataset.manual='1';v.value=won(seed.tax);invVat();}}}
+  invDeadlineHint();
 }
 function onInvPick(){const v=VENDORS.find(x=>x.name===val('i_company'));if(v){document.getElementById('i_bizno').value=v.bizNo||'';document.getElementById('i_email').value=v.email||'';}}
-function invVat(){const s=numVal('i_supply');const t=Math.round(s*0.1);const e=document.getElementById('pv_s');if(!e)return;e.textContent=won(s);document.getElementById('pv_t').textContent=won(t);document.getElementById('pv_tot').textContent=won(s+t);}
+function invVat(){const s=numVal('i_supply');
+  const vEl=document.getElementById('i_vat');
+  if(vEl&&!vEl.dataset.manual)vEl.value=s?comma(String(Math.round(s*0.1))):'';
+  const t=vEl?numVal('i_vat'):Math.round(s*0.1);
+  const e=document.getElementById('pv_s');if(!e)return;e.textContent=won(s);document.getElementById('pv_t').textContent=won(t);document.getElementById('pv_tot').textContent=won(s+t);}
 function invDeadlineHint(){const el=document.getElementById('i_dl');if(!el)return;const b=deadlineBadge(val('i_date'));el.innerHTML=b?'<div>'+b+' <span class="t-sub">— 작성일 기준 익월 10일까지 발행</span></div>':'';}
-function submitInvoice(){const supply=numVal('i_supply');const r={id:uid('v'),requester:ME().name,team:ME().team,saleType:val('i_type'),company:val('i_company'),bizNo:digits(val('i_bizno')),ceo:val('i_ceo'),email:val('i_email'),writeDate:val('i_date'),itemName:val('i_item'),supply,tax:Math.round(supply*0.1),total:supply+Math.round(supply*0.1),evidence:val('i_evidence'),status:'requested',applied:today()};
+function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat');const r={id:uid('v'),requester:ME().name,team:ME().team,saleType:val('i_type'),company:val('i_company'),bizNo:digits(val('i_bizno')),ceo:val('i_ceo'),email:val('i_email'),writeDate:val('i_date'),itemName:val('i_item'),supply,tax:vat,total:supply+vat,evidence:val('i_evidence'),status:'requested',applied:today()};
   if(!r.company||!r.bizNo||!r.ceo||!r.email||!r.itemName||!r.supply){toast('필수 항목을 채워주세요.','err');return;}
   if(r.bizNo.length!==10){toast('사업자등록번호는 10자리예요.','err');return;}
   if(isLockedMonth(r.writeDate)){toast(r.writeDate.slice(0,7)+'은 마감되어 발행할 수 없어요.','err');return;}
@@ -1708,7 +1721,7 @@ function deleteInvoice(id){
       .catch(()=>{});
   });
 }
-function editInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!canEditInvoice(r))return;openInvoiceForm({editId:id,company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:r.writeDate,itemName:r.itemName,supply:r.supply,evidence:r.evidence});}
+function editInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!canEditInvoice(r))return;openInvoiceForm({editId:id,company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:r.writeDate,itemName:r.itemName,supply:r.supply,tax:r.tax,evidence:r.evidence});}
 function cloneInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;openInvoiceForm({company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:today(),itemName:r.itemName,supply:r.supply});toast('복제했어요. 작성일 확인하세요.','ok');}
 function viewInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;const st=ISTATUS[r.status];
   const invEditBtn=(canEditInvoice(r)?`<button class="btn btn-line btn-sm" onclick="closeModal();editInvoice('${id}')"><span>수정</span></button>`:'')+(canDeleteInvoice(r)?`<button class="btn btn-danger btn-sm" onclick="closeModal();deleteInvoice('${id}')"><span>삭제</span></button>`:'');
@@ -1743,10 +1756,10 @@ function openDepositForm(id){
 function saveDepositForm(id){
   const d=val('dep_date')||'';const amt=numVal('dep_amt')||0;const note=(val('dep_note')||'').trim();
   if(!d&&!amt&&!note){delete DEPOSITS[id];}else{DEPOSITS[id]={d,amt,note};}
-  _pushDepDate(id,d);
+  _pushDep(id,d,amt,note);
   saveDeposits();closeModal();render();toast(d?'입금확인 저장했어요. ('+d+')':'메모를 저장했어요.','ok');
 }
-function clearDeposit(id){delete DEPOSITS[id];_pushDepDate(id,'');saveDeposits();closeModal();render();toast('입금확인·메모를 삭제했어요.');}
+function clearDeposit(id){delete DEPOSITS[id];_pushDep(id,'',0,'');saveDeposits();closeModal();render();toast('입금확인·메모를 삭제했어요.');}
 /* 입금확인 엑셀 가져오기 — 세금계산서 시트에서 입금일·실제입금액·내용을 읽어 발행 건과 매칭 */
 function openDepositImport(){
   if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}
@@ -1888,7 +1901,7 @@ function runDepositImport(){
       if(!v)return;
       used.add(v.id);
       DEPOSITS[v.id]={d:rc.dep||'',amt:rc.amt||0,note:rc.note||''};
-      if(rc.dep)_pushDepDate(v.id,rc.dep);
+      _pushDep(v.id,rc.dep||'',rc.amt||0,rc.note||'');
       hit++;
     });
     saveDeposits();render();
@@ -1896,7 +1909,7 @@ function runDepositImport(){
     toast(hit+'건 입금확인 정보를 가져왔어요.','ok');
   }).catch(e=>{out.textContent='파일을 읽지 못했어요: '+((e&&e.message)||e);});
 }
-function batchDeposit(){if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!depositOf(r.id));if(!ss.length){toast('선택한 항목이 이미 모두 입금확인 상태예요.','err');return;}const d=today();ss.forEach(r=>{const c=depData(r.id);DEPOSITS[r.id]={d,amt:c.amt||0,note:c.note||''};_pushDepDate(r.id,d);});saveDeposits();_sel=new Set();render();toast(ss.length+'건 입금확인 표시. ('+d+')','ok');}
+function batchDeposit(){if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!depositOf(r.id));if(!ss.length){toast('선택한 항목이 이미 모두 입금확인 상태예요.','err');return;}const d=today();ss.forEach(r=>{const c=depData(r.id);DEPOSITS[r.id]={d,amt:c.amt||0,note:c.note||''};_pushDep(r.id,d,c.amt||0,c.note||'');});saveDeposits();_sel=new Set();render();toast(ss.length+'건 입금확인 표시. ('+d+')','ok');}
 function batchInvoice(status){const ss=DB.invoice.filter(r=>_sel.has(r.id)&&r.status==='requested');if(!ss.length){toast('선택한 항목 중 발행대기 건이 없어요.','err');return;}if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_invoice',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리.','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='issued';});_sel=new Set();render();toast(ss.length+'건 처리.','ok');}}
 function exportInvoiceRows(ss,fname){loadXLSX().then(function(){const head=['요청일','요청자','소속팀','사업자등록번호(공급받는자)','상호','이메일(공급받는자)','계산서작성일','품목명','유형','공급가액','부가세액','세금계산서합계','실제입금액','내용','계산서발급일','상태','입금확인'];const data=ss.map(r=>{const dd=depData(r.id);return [r.applied,r.requester,normalizeTeam(r.team)||'',r.bizNo,r.company,r.email,r.writeDate,r.itemName,r.saleType,r.supply,r.tax,r.total,dd.amt||'',dd.note||'',r.issuedAt||'',(ISTATUS[r.status]||['?'])[0],dd.d||''];});const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:11},{wch:8},{wch:9},{wch:16},{wch:20},{wch:24},{wch:11},{wch:26},{wch:6},{wch:12},{wch:11},{wch:13},{wch:12},{wch:26},{wch:11},{wch:9},{wch:11}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'세금계산서');XLSX.writeFile(wb,fname);toast(ss.length+'건 엑셀 다운로드.','ok');}).catch(()=>toast('엑셀 로드 실패','err'));}
 function exportInvoice(){const ss=DB.invoice.filter(r=>_sel.has(r.id));if(!ss.length){toast('항목을 선택하세요.','err');return;}exportInvoiceRows(ss,'세금계산서_선택_'+today()+'.xlsx');}
@@ -2071,7 +2084,7 @@ async function loadMe(){
 }
 function fmtTs(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
 function _mapPayout(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:r.evidence_url,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
-function _mapInvoice(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:r.evidence_url,status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||'',paidConfirm:r.paid_confirm_date||''};}
+function _mapInvoice(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:dx.url,depAmt:dx.a||0,depNote:dx.n||'',status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||'',paidConfirm:r.paid_confirm_date||''};}
 function _mapCoupon(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,name:r.recipient_name,phone:r.recipient_phone,phoneNorm:r.recipient_phone_norm,amount:Number(r.amount)||0,code:r.code||'',status:r.status,hold:r.hold_reason||'',isOverride:r.is_override,memo:r.memo||'',createdAt:(r.created_at||'').slice(0,10)};}
 function _mapExpense(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
 async function fetchAllRows(factory){const PAGE=1000;let from=0,all=[];for(;;){const{data,error}=await factory().range(from,from+PAGE-1);if(error)throw error;all=all.concat(data||[]);if(!data||data.length<PAGE)break;from+=PAGE;}return all;}
