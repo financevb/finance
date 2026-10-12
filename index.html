@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261012d'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261012e'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -916,7 +916,7 @@ function renderPayout(){
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl invtbl rsz-payout"><thead><tr>';
   h+=`<th class="mhide">#</th>`;
   if(mineApprove)h+=`<th class="mhide"><input type="checkbox" class="cbx" ${list.every(r=>_sel.has(r.id))?'checked':''} onclick="toggleAll('payout')"></th>`;
-  h+=`<th class="sortable mhide" onclick="setSort('payout','date')">이체요청일${sortIcon('payout','date')}</th><th class="sortable mhide" onclick="setSort('payout','due')">이체희망일${sortIcon('payout','due')}</th><th class="mhide">신청인</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('payout','name')">거래처${sortIcon('payout','name')}</th><th class="mhide">적요</th><th class="mhide">분류</th><th class="mhide">은행</th><th class="mhide">계좌번호</th><th class="sortable" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th>상태</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="sortable mhide" onclick="setSort('payout','date')">이체요청일${sortIcon('payout','date')}</th><th class="sortable mhide" onclick="setSort('payout','due')">이체희망일${sortIcon('payout','due')}</th><th class="mhide">신청인</th><th class="mhide">팀</th><th class="sortable" onclick="setSort('payout','name')">거래처${sortIcon('payout','name')}</th><th class="mhide">적요</th><th class="mhide">분류</th><th class="mhide">은행</th><th class="mhide">계좌번호</th><th class="sortable" onclick="setSort('payout','amount')">금액${sortIcon('payout','amount')}</th><th class="mhide">이상·고액</th><th class="mhide">증빙/비고</th><th class="mhide">입금확인</th><th>상태</th><th></th></tr></thead><tbody>`;
   pageList.forEach((r,_i)=>{
     const st=PSTATUS[r.status]||['?',''];const flags=r.status==='requested'?scanPayout(r):[];
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
@@ -936,6 +936,8 @@ function renderPayout(){
     h+=`<td class="mhide" style="max-width:175px;white-space:normal">${flags.length?`<span class="flagwrap" onclick="event.stopPropagation();anomalyDetail('${r.id}')" title="클릭하면 감지 근거 보기">${flags.map(flagHtml).join('')}</span>`:''}${isBig(r)?(flags.length?' ':'')+'<span class="tag tag-blue">🔺 고액</span>':(flags.length?'':'<span class="t-sub">–</span>')}</td>`;
     const _pf=r.proofStatus==='수취완료'?'<span title="매입 계산서 확인됨">✅</span> ':(PROOF_ADEQ.has(r.proofType)?'<span title="계산서 아직 미확인" style="opacity:.7">⏳</span> ':'');
     h+=`<td class="mhide" style="white-space:nowrap">${_pf}${r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--billy-blue);text-decoration:underline;font-size:12px;white-space:nowrap">📎 링크 ↗</a>`:(_pf?'':'<span class="t-sub">–</span>')}</td>`;
+    const _pc=(r.paidAt&&r.payConfirmAmt)?('✔ '+fmtD(r.paidAt)+' · '+won(r.payConfirmAmt)):(r.paidAt&&r.status==='paid'?('✔ '+fmtD(r.paidAt)):'');
+    h+=`<td class="mhide" style="white-space:nowrap;font-size:12px">${r.status==='paid'?(canManageAll()?`<button class="depbtn ${_pc?'depon':''}" onclick="event.stopPropagation();openPayConfirm('${r.id}')">${_pc||'＋ 기입'}</button>`:(_pc?`<span class="badge badge-deposit">${_pc}</span>`:'<span class="t-sub">–</span>')):'<span class="t-sub">–</span>'}</td>`;
     h+=`<td>${mineApprove?`<button class="badge ${st[1]}" onclick="event.stopPropagation();openStatusMenu('${r.id}',event)" title="클릭해서 상태 변경">${st[0]}<span class="caret">▼</span></button>`:`<span class="badge ${st[1]}">${st[0]}</span>`}</td>`;
     h+='<td><div class="rowact">';
     h+=`<button class="iconbtn" title="복제" onclick="event.stopPropagation();clonePayout('${r.id}')">${I.copy}</button>`;
@@ -1142,7 +1144,7 @@ function viewPayout(id){
     <dt>이체요청일</dt><dd class="num">${escH(fmtD(r.appliedTs||r.applied)||'-')}</dd>
     <dt>이체희망일</dt><dd class="num">${escH(fmtD(dueOf(r))||'-')}</dd>
     <dt>고액 이체건</dt><dd>${isBig(r)?'🔺 1천만+ (고액)':'해당 없음'}</dd>
-    ${r.paidAt?`<dt>지급완료</dt><dd>${escH(fmtD(r.paidAt))}</dd>`:''}
+    ${r.paidAt?`<dt>지급완료</dt><dd>${escH(fmtD(r.paidAt))}${r.payConfirmAmt?' · 입금액 <b>'+won(r.payConfirmAmt)+'원</b>':''}</dd>`:''}
   </div>${proof}${fuel}${wh}${memoHtml(r)}`,foot);
 }
 function proofDetailHtml(r){
@@ -1646,7 +1648,7 @@ function renderInvoice(){
 /* 표 열 너비 드래그 조절 (공용) — localStorage 저장, 열 제목 기준 */
 const COLW_DEF={
   invoice:{'#':42,'_cb':36,'요청일':92,'요청자':70,'팀':64,'상호':160,'사업자번호':104,'이메일':170,'작성일':92,'품목명':200,'유형':54,'공급가액':94,'부가세액':88,'합계':100,'실제입금액':96,'내용':130,'발급일':88,'상태':92,'입금확인':106},
-  payout:{'#':42,'_cb':36,'이체요청일':138,'이체희망일':96,'신청인':70,'팀':62,'거래처':150,'적요':210,'분류':96,'은행':86,'계좌번호':128,'금액':100,'이상·고액':96,'증빙/비고':82,'상태':100}
+  payout:{'#':42,'_cb':36,'이체요청일':138,'이체희망일':96,'신청인':70,'팀':62,'거래처':150,'적요':210,'분류':96,'은행':86,'계좌번호':128,'금액':100,'이상·고액':96,'증빙/비고':82,'입금확인':150,'상태':100}
 };
 function initColResize(key){
   const tbl=document.querySelector('#content table.rsz-'+key);if(!tbl||tbl._rszDone)return;tbl._rszDone=true;
@@ -1830,6 +1832,18 @@ function saveDepositForm(id){
   saveDeposits();closeModal();render();toast(d?'입금확인 저장했어요. ('+d+')':'메모를 저장했어요.','ok');
 }
 function clearDeposit(id){delete DEPOSITS[id];_pushDep(id,'',0,'');saveDeposits();closeModal();render();toast('입금확인·메모를 삭제했어요.');}
+/* ── 이체 입금확인 (지급 날짜·금액 수기 기입, 정채영 전용) — 금액은 evidence_url의 #D{json}에 저장 ── */
+function _pushPayConfirm(id,d,amt){if(!IS_SUPA){const r=DB.payout.find(x=>x.id===id);if(r){r.paidAt=d||'';r.payConfirmAmt=amt||0;}return Promise.resolve();}
+  const r=DB.payout.find(x=>x.id===id);const url=r?(r.evidence||''):'';
+  const ev=(amt?('#D'+JSON.stringify({a:amt})+'#D'):'')+url;
+  return sb.from('fin_payouts').update({paid_date:d||null,evidence_url:ev}).eq('id',id).then(({error})=>{if(error){toast(error.message,'err');throw error;}if(r){r.paidAt=d||'';r.payConfirmAmt=amt||0;}});}
+function openPayConfirm(id){const r=DB.payout.find(x=>x.id===id);if(!r||(IS_SUPA&&!canManageAll()))return;
+  modal('💰 입금(지급) 확인 기입','',`<div class="dl"><dt>거래처</dt><dd>${escH(r.payee)}</dd><dt>요청 금액</dt><dd><b>${won(r.amount)} ${escH(r.unit)}</b></dd></div>
+    <div class="f2"><div class="form-row"><label>입금 날짜</label><input class="input" type="date" id="pc_date" value="${r.paidAt||today()}"></div>
+    <div class="form-row"><label>입금 금액</label><input class="input num" id="pc_amt" value="${won(r.payConfirmAmt||r.amount)}" oninput="this.value=comma(this.value)"></div></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-line" onclick="savePayConfirm('${id}',true)">지우기</button><button class="btn btn-primary" onclick="savePayConfirm('${id}')">저장</button>`);}
+function savePayConfirm(id,clear){const d=clear?'':val('pc_date');const amt=clear?0:numVal('pc_amt');
+  _pushPayConfirm(id,d,amt).then(()=>{closeModal();render();toast(clear?'입금확인을 지웠어요.':'입금확인 저장 — '+d+' · '+won(amt)+'원','ok');}).catch(()=>{});}
 /* ── 매입 세금계산서 대조 (거래처 원장) — 정채영 전용 ── */
 function _lnorm(s){return String(s||'').replace(/\(주\)|주식회사|㈜|\(유\)|유한회사|유한책임회사|\s/g,'').toLowerCase();}
 function _impNum2(v){if(typeof v==='number')return v;const n=parseFloat(String(v).replace(/[,\s원]/g,''));return isNaN(n)?0:n;}
@@ -2254,7 +2268,7 @@ async function loadMe(){
   SUPA_USER={email,role,name,team,av:(name||'·').slice(0,1),rl:roleLabel(role)};ROLE=role;
 }
 function fmtTs(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
-function _mapPayout(r){const ts=fmtTs(r.created_at);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:r.evidence_url,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
+function _mapPayout(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:dx.url,payConfirmAmt:dx.a||0,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
 function _mapInvoice(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:dx.url,depAmt:dx.a||0,depNote:dx.n||'',status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||'',paidConfirm:r.paid_confirm_date||''};}
 function _mapCoupon(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,name:r.recipient_name,phone:r.recipient_phone,phoneNorm:r.recipient_phone_norm,amount:Number(r.amount)||0,code:r.code||'',status:r.status,hold:r.hold_reason||'',isOverride:r.is_override,memo:r.memo||'',createdAt:(r.created_at||'').slice(0,10)};}
 function _mapExpense(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
