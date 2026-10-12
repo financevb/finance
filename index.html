@@ -344,9 +344,9 @@ function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFull
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
 function won(n){return (Number(n)||0).toLocaleString('ko-KR');}
-function comma(s){return String(s||'').replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function comma(s){s=String(s||'');const neg=s.trim().startsWith('-');return (neg?'-':'')+s.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',');} /* 음수(수정 발행) 지원 */
 function val(id){const el=document.getElementById(id);return el?el.value.trim():'';}
-function numVal(id){return Number(String(val(id)).replace(/[^0-9]/g,''))||0;}
+function numVal(id){const s=String(val(id));const neg=s.trim().startsWith('-');const n=Number(s.replace(/[^0-9]/g,''))||0;return neg?-n:n;}
 function digits(s){return String(s||'').replace(/[^0-9]/g,'');}
 /* 사람 이름이 좁은 칸에서 줄바꿈될 때 성 단위로만 끊기게(홍/찬주). .nmcell(word-break:keep-all)과 함께 사용. */
 const _SUR2=['남궁','선우','독고','황보','제갈','사공','서문','동방','어금','망절','등정'];
@@ -1711,23 +1711,28 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
   }
   pr.then(async()=>{
       if(!IS_SUPA){DB.invoice.unshift(r);return;}
-      const {data,error}=await sb.rpc('fin_submit_invoice',{p:ipl});
-      if(!error)return loadData();
-      /* 서버는 휴일 연장을 몰라 익월 10일로 거부 — 기한 내(휴일 연장 반영)면 작성일 보정 등록 시도 */
-      if(/기한|발행/.test(error.message||'')){
-        const alt=Object.assign({},ipl,{writeDate:today()});
-        const r2=await sb.rpc('fin_submit_invoice',{p:alt});
-        if(r2.error){toast(r2.error.message||'오류가 났어요','err');throw r2.error;}
-        const nid=(r2.data&&r2.data.id)||r2.data;
-        await sb.from('fin_invoices').update({write_date:ipl.writeDate}).eq('id',nid);
-        const {data:chk}=await sb.from('fin_invoices').select('write_date').eq('id',nid).maybeSingle();
-        if(chk&&chk.write_date===ipl.writeDate)return loadData(); /* 보정 성공 */
-        /* 작성일 보정 권한이 없는 계정 — 방금 등록한 건 취소하고 안내 */
-        await sb.rpc('fin_decide_invoice',{p_id:nid,p_status:'rejected',p_reason:'삭제됨'});
-        await loadData();
-        toast('기한(휴일 연장) 건이라 서버 검증에 걸렸어요. 재무팀(정채영)에게 등록을 요청해주세요.','err');throw error;
+      /* 마이너스(수정) 발행·휴일 연장 기한은 서버 검증이 몰라서, 일단 통과값으로 등록 후 실제값으로 보정 */
+      const neg=(ipl.supply<0||ipl.vat<0||ipl.total<0);
+      const mk=wd=>{const p=Object.assign({},ipl,{writeDate:wd});if(neg){p.supply=Math.abs(ipl.supply);p.vat=Math.abs(ipl.vat);p.total=Math.abs(ipl.total);}return p;};
+      let usedToday=false;
+      let res=await sb.rpc('fin_submit_invoice',{p:mk(ipl.writeDate)});
+      if(res.error&&/기한|발행/.test(res.error.message||'')){usedToday=true;res=await sb.rpc('fin_submit_invoice',{p:mk(today())});}
+      if(res.error){toast(res.error.message||'오류가 났어요','err');throw res.error;}
+      const nid=(res.data&&res.data.id)||res.data;
+      const fix={};
+      if(usedToday)fix.write_date=ipl.writeDate;
+      if(neg){fix.supply=ipl.supply;fix.vat=ipl.vat;fix.total=ipl.total;}
+      if(Object.keys(fix).length){
+        await sb.from('fin_invoices').update(fix).eq('id',nid);
+        const {data:chk}=await sb.from('fin_invoices').select('write_date,total').eq('id',nid).maybeSingle();
+        const okFix=chk&&(!usedToday||chk.write_date===ipl.writeDate)&&(!neg||Number(chk.total)===Number(ipl.total));
+        if(!okFix){ /* 보정 권한 없는 계정 — 방금 등록분 정리 후 안내 */
+          await sb.rpc('fin_decide_invoice',{p_id:nid,p_status:'rejected',p_reason:'삭제됨'});
+          await loadData();
+          toast((neg?'마이너스 발행':'기한(휴일 연장) 건')+'은 서버 검증에 걸렸어요. 재무팀(정채영)에게 등록을 요청해주세요.','err');throw new Error('fix-failed');
+        }
       }
-      toast(error.message||'오류가 났어요','err');throw error;
+      return loadData();
     })
     .then(()=>{_invSubmitting=false;_editInvoiceId=null;closeModal();render();toast(editId?'발행 요청을 수정했어요. (기존 요청은 취소 처리)':'발행 요청을 등록했어요.','ok');})
     .catch(()=>{_invSubmitting=false;const b=document.querySelector('#ov .modal-foot .btn-primary');if(b)b.disabled=false;});
