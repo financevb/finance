@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261012c'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261012d'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -934,7 +934,8 @@ function renderPayout(){
     h+=`<td class="mhide num">${escH(r.account||'-')}</td>`;
     h+=`<td style="text-align:right"><span class="amt">${won(r.amount)}</span>${r.unit!=='원'?' <span class="t-sub">'+r.unit+'</span>':''}</td>`;
     h+=`<td class="mhide" style="max-width:175px;white-space:normal">${flags.length?`<span class="flagwrap" onclick="event.stopPropagation();anomalyDetail('${r.id}')" title="클릭하면 감지 근거 보기">${flags.map(flagHtml).join('')}</span>`:''}${isBig(r)?(flags.length?' ':'')+'<span class="tag tag-blue">🔺 고액</span>':(flags.length?'':'<span class="t-sub">–</span>')}</td>`;
-    h+=`<td class="mhide">${r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--billy-blue);text-decoration:underline;font-size:12px;white-space:nowrap">📎 링크 ↗</a>`:'<span class="t-sub">–</span>'}</td>`;
+    const _pf=r.proofStatus==='수취완료'?'<span title="매입 계산서 확인됨">✅</span> ':(PROOF_ADEQ.has(r.proofType)?'<span title="계산서 아직 미확인" style="opacity:.7">⏳</span> ':'');
+    h+=`<td class="mhide" style="white-space:nowrap">${_pf}${r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--billy-blue);text-decoration:underline;font-size:12px;white-space:nowrap">📎 링크 ↗</a>`:(_pf?'':'<span class="t-sub">–</span>')}</td>`;
     h+=`<td>${mineApprove?`<button class="badge ${st[1]}" onclick="event.stopPropagation();openStatusMenu('${r.id}',event)" title="클릭해서 상태 변경">${st[0]}<span class="caret">▼</span></button>`:`<span class="badge ${st[1]}">${st[0]}</span>`}</td>`;
     h+='<td><div class="rowact">';
     h+=`<button class="iconbtn" title="복제" onclick="event.stopPropagation();clonePayout('${r.id}')">${I.copy}</button>`;
@@ -1896,16 +1897,26 @@ async function runLedgerCompare(){
     });
     out.innerHTML=h;
     document.getElementById('lg_xbtn').style.display='';
-    const markable=groups.reduce((s,g)=>s+g.gp.filter(p=>p.used&&p.row&&PROOF_ADEQ.has(p.row.proofType)&&p.row.proofStatus!=='수취완료').length,0);
+    const markable=groups.reduce((s,g)=>s+g.gp.filter(p=>p.used&&p.row&&p.row.proofStatus!=='수취완료').length,0);
     const mb=document.getElementById('lg_markbtn');mb.style.display='';mb.innerHTML='✅ 일치 건 수취완료 ('+markable+'건)';
   }catch(e){out.textContent='오류: '+((e&&e.message)||e);}
 }
 async function ledgerMarkProof(){
   if(!_LG)return;
-  const targets=[];_LG.groups.forEach(g=>g.gp.forEach(p=>{if(p.used&&p.row&&PROOF_ADEQ.has(p.row.proofType)&&p.row.proofStatus!=='수취완료')targets.push(p.row);}));
+  const targets=[];_LG.groups.forEach(g=>g.gp.forEach(p=>{if(p.used&&p.row&&p.row.proofStatus!=='수취완료')targets.push(p);}));
   if(!targets.length){toast('처리할 건이 없어요.','ok');return;}
-  let ok=0;for(const r of targets){try{const {error}=await sb.rpc('fin_mark_proof',{p_id:r.id,p_received:true});if(!error){r.proofStatus='수취완료';ok++;}}catch(e){}}
-  await loadData();toast(ok+'건 증빙 수취완료 처리했어요.','ok');
+  let ok=0;
+  for(const p of targets){
+    const r=p.row;
+    try{
+      if(PROOF_ADEQ.has(r.proofType)){const {error}=await sb.rpc('fin_mark_proof',{p_id:r.id,p_received:true});if(!error){r.proofStatus='수취완료';ok++;}}
+      else{ /* 증빙없음·명세서였는데 계산서가 실제로 확인된 건 — 증빙 정보를 계산서로 승격 */
+        const {error}=await sb.from('fin_payouts').update({proof_type:'세금계산서',proof_date:(p.pair&&p.pair.date)||r.proofDate||r.applied,proof_status:'수취완료',proof_received_at:today()}).eq('id',r.id);
+        if(!error){r.proofType='세금계산서';r.proofStatus='수취완료';ok++;}
+      }
+    }catch(e){}
+  }
+  await loadData();toast(ok+'건을 계산서 확인됨(수취완료)으로 처리했어요.','ok');
   const mb=document.getElementById('lg_markbtn');if(mb)mb.innerHTML='✅ 일치 건 수취완료 (0건)';
 }
 function exportLedger(){
