@@ -343,6 +343,21 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
+const APP_VERSION='v20261012a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+(function(){if(location.protocol!=='https:')return;
+  async function chk(){try{
+    const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
+    const m=t.match(/APP_VERSION='([^']+)'/);
+    if(m&&m[1]!==APP_VERSION&&!document.getElementById('verBanner')){
+      const b=document.createElement('div');b.id='verBanner';
+      b.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99999;background:#3182F6;color:#fff;font-size:13px;font-weight:700;padding:10px 18px;border-radius:999px;box-shadow:0 4px 14px rgba(49,130,246,.35);cursor:pointer';
+      b.textContent='🔄 새 버전이 나왔어요 — 클릭해서 업데이트';
+      b.onclick=()=>location.replace(location.pathname+'?v='+m[1]);
+      document.body.appendChild(b);
+    }
+  }catch(e){}}
+  setTimeout(chk,5000);setInterval(chk,5*60*1000);
+})();
 function won(n){return (Number(n)||0).toLocaleString('ko-KR');}
 function comma(s){s=String(s||'');const neg=s.trim().startsWith('-');return (neg?'-':'')+s.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',');} /* 음수(수정 발행) 지원 */
 function val(id){const el=document.getElementById(id);return el?el.value.trim():'';}
