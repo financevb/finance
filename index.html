@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261012a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261012b'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -759,6 +759,7 @@ function render(){
   if(current==='expense')act=`<button class="btn btn-primary" onclick="openExpenseForm()">${I.plus}<span>지출결의 등록</span></button>`;
   if(current==='cardreport')act=`<button class="btn btn-line btn-sm" onclick="openCardBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openCardForm()">${I.plus}<span>기명 법카 신고</span></button>`;
   if(current==='invoice')act=`${canDeposit()?`<button class="btn btn-line" onclick="openDepositImport()">📥<span>입금확인 가져오기</span></button>`:''}<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
+  if(current==='proof'&&canManageAll())act=`<button class="btn btn-primary" onclick="openLedgerCompare()">📒<span>매입 계산서 대조 (원장)</span></button>`;
   if(current==='vendors')act=`<button class="btn btn-line" onclick="exportVendors()">${I.download}<span>거래처 엑셀</span></button>`;
   if(current==='coupon')act=`${canApprove()?`<button class="btn btn-line btn-sm" onclick="openCouponCodeForm()">${I.plus}<span>코드 추가</span></button>`:''}<button class="btn btn-primary" onclick="openCouponForm()">${I.plus}<span>새 쿠폰 발급</span></button>`;
   document.getElementById('pgActions').innerHTML=act;
@@ -1828,6 +1829,97 @@ function saveDepositForm(id){
   saveDeposits();closeModal();render();toast(d?'입금확인 저장했어요. ('+d+')':'메모를 저장했어요.','ok');
 }
 function clearDeposit(id){delete DEPOSITS[id];_pushDep(id,'',0,'');saveDeposits();closeModal();render();toast('입금확인·메모를 삭제했어요.');}
+/* ── 매입 세금계산서 대조 (거래처 원장) — 정채영 전용 ── */
+function _lnorm(s){return String(s||'').replace(/\(주\)|주식회사|㈜|\(유\)|유한회사|유한책임회사|\s/g,'').toLowerCase();}
+function _impNum2(v){if(typeof v==='number')return v;const n=parseFloat(String(v).replace(/[,\s원]/g,''));return isNaN(n)?0:n;}
+let _LG=null;
+function openLedgerCompare(){
+  if(IS_SUPA&&!canManageAll())return;
+  _LG=null;
+  modal('📒 매입 계산서 대조 (거래처 원장)','wide',`
+    <div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">매입 세금계산서 엑셀(WEHAGO/홈택스)과 이체 내역을 거래처별 원장으로 대조해요.</b><br>거래처명 + 금액(합계) + 날짜 근접 기준으로 1:1로만 짝을 맞춰요 — 계산서 한 장은 한 건에만 매칭.</div>
+    <div class="f2"><div class="form-row"><label>매입 엑셀 파일</label><input type="file" id="lg_file" accept=".xlsx,.xls" class="input" style="padding:8px"></div><div class="form-row"><label>연도</label><input class="input num" id="lg_year" value="${today().slice(0,4)}"></div></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--gray-700);margin-bottom:4px"><input type="checkbox" class="cbx" id="lg_onlyboth" checked>이체 내역이 있는 거래처만 보기</label>
+    <div id="lg_out" style="margin-top:10px;max-height:55vh;overflow:auto"></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">닫기</button><button class="btn btn-line" id="lg_xbtn" style="display:none" onclick="exportLedger()">${I.download}<span>원장 엑셀</span></button><button class="btn btn-line" id="lg_markbtn" style="display:none" onclick="ledgerMarkProof()">✅ 일치 건 수취완료</button><button class="btn btn-primary" onclick="runLedgerCompare()">대조 실행</button>`);
+}
+async function runLedgerCompare(){
+  const f=document.getElementById('lg_file');const out=document.getElementById('lg_out');
+  if(!f||!f.files||!f.files[0]){toast('엑셀 파일을 선택해 주세요.','err');return;}
+  out.textContent='읽는 중…';
+  try{
+    await loadXLSX();
+    const yr=val('lg_year')||today().slice(0,4);
+    const wb=XLSX.read(await f.files[0].arrayBuffer(),{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false,blankrows:false});
+    let hi=-1;for(let i=0;i<Math.min(rows.length,8);i++){if(rows[i].some(x=>String(x).includes('거래처'))&&rows[i].some(x=>String(x).includes('합계'))){hi=i;break;}}
+    if(hi<0){out.textContent='양식을 인식하지 못했어요. (열 제목에 거래처·합계가 필요해요)';return;}
+    const H=rows[hi].map(x=>String(x).replace(/\s/g,''));const col=t=>H.findIndex(h=>h.includes(t));
+    const c={d:col('일자'),name:col('거래처'),item:col('품명'),tot:col('합계')};
+    const inv=[];
+    rows.slice(hi+1).forEach(r=>{
+      const name=String(r[c.name]||'').trim();const tot=_impNum2(r[c.tot]);
+      if(!name||!tot)return;
+      const ds=String(r[c.d]||'').trim();let date='';
+      let m=ds.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);if(m)date=m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');
+      else{m=ds.match(/^(\d{1,2})[-/.](\d{1,2})$/);if(m)date=yr+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');}
+      inv.push({date,name,key:_lnorm(name),item:String(r[c.item]||''),tot,used:false,pair:null});
+    });
+    const pays=DB.payout.filter(p=>p.unit==='원'&&p.status!=='canceled'&&p.status!=='rejected'&&((dueOf(p)||p.applied||'').slice(0,4)===yr)&&p.category!=='유류비')
+      .map(p=>({id:p.id,date:dueOf(p)||p.applied,name:p.payee,key:_lnorm(p.payee),memo:purposeText(p),amt:p.amount,used:false,pair:null,near:true,row:p}));
+    const keys=new Set();inv.forEach(x=>keys.add(x.key));pays.forEach(x=>keys.add(x.key));
+    const onlyBoth=document.getElementById('lg_onlyboth').checked;
+    const day=s=>s?Math.round(new Date(s+'T00:00:00Z').getTime()/86400000):0;
+    const groups=[];
+    keys.forEach(k=>{
+      if(!k)return;
+      const gi=inv.filter(x=>x.key===k),gp=pays.filter(x=>x.key===k);
+      if(onlyBoth&&(!gi.length||!gp.length))return;
+      gp.forEach(p=>{
+        const cands=gi.filter(x=>!x.used&&x.tot===p.amt);
+        if(!cands.length)return;
+        cands.sort((a,b)=>Math.abs(day(a.date)-day(p.date))-Math.abs(day(b.date)-day(p.date)));
+        const c2=cands[0];c2.used=true;p.used=true;p.pair=c2;c2.pair=p;
+        p.near=Math.abs(day(c2.date)-day(p.date))<=45;
+      });
+      const name=(gi[0]||gp[0]).name;
+      const iSum=gi.reduce((s,x)=>s+x.tot,0),pSum=gp.reduce((s,x)=>s+x.amt,0);
+      groups.push({k,name,gi,gp,iSum,pSum,diff:iSum-pSum});
+    });
+    groups.sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+    _LG={groups,yr};
+    const okG=groups.filter(g=>g.diff===0).length;
+    let h=`<div class="sumbar"><div class="sb-seg"><span>거래처</span> <b>${groups.length}곳</b></div><div class="sb-seg"><span>✅ 차액 0</span> <b>${okG}곳</b></div><div class="sb-seg"><span>⚠️ 차액 있음</span> <b>${groups.length-okG}곳</b></div></div>`;
+    groups.forEach(g=>{
+      const rowsAll=[...g.gi.map(x=>({t:'계산서',date:x.date,desc:x.item,amt:x.tot,ok:!!x.pair,near:true})),...g.gp.map(x=>({t:'이체',date:x.date,desc:x.memo,amt:x.amt,ok:!!x.pair,near:x.near}))].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+      h+=`<details ${g.diff!==0?'open':''} style="border:1px solid var(--gray-200);border-radius:10px;margin-bottom:8px;padding:4px 10px"><summary style="cursor:pointer;font-weight:700;font-size:13px;padding:6px 0">${escH(g.name)} <span style="color:${g.diff===0?'#03B26C':'var(--sys-orange)'}">${g.diff===0?'✅ 일치':'⚠️ 차액 '+won(g.diff)+'원'}</span> <span class="t-sub">계산서 ${won(g.iSum)} · 이체 ${won(g.pSum)}</span></summary><table style="width:100%;font-size:12px;border-collapse:collapse">${rowsAll.map(r=>`<tr style="border-top:1px solid var(--gray-100)"><td style="padding:4px;white-space:nowrap" class="num">${escH(fmtD(r.date)||'-')}</td><td style="padding:4px"><span class="tag ${r.t==='계산서'?'tag-blue':'tag-gray'}">${r.t}</span></td><td style="padding:4px;text-align:left;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(r.desc)}">${escH(r.desc||'-')}</td><td style="padding:4px;text-align:right;white-space:nowrap" class="num">${won(r.amt)}</td><td style="padding:4px;white-space:nowrap">${r.ok?(r.near?'✅':'🔸 날짜 멀어요'):'⚠️ 짝없음'}</td></tr>`).join('')}</table></details>`;
+    });
+    out.innerHTML=h;
+    document.getElementById('lg_xbtn').style.display='';
+    const markable=groups.reduce((s,g)=>s+g.gp.filter(p=>p.used&&p.row&&PROOF_ADEQ.has(p.row.proofType)&&p.row.proofStatus!=='수취완료').length,0);
+    const mb=document.getElementById('lg_markbtn');mb.style.display='';mb.innerHTML='✅ 일치 건 수취완료 ('+markable+'건)';
+  }catch(e){out.textContent='오류: '+((e&&e.message)||e);}
+}
+async function ledgerMarkProof(){
+  if(!_LG)return;
+  const targets=[];_LG.groups.forEach(g=>g.gp.forEach(p=>{if(p.used&&p.row&&PROOF_ADEQ.has(p.row.proofType)&&p.row.proofStatus!=='수취완료')targets.push(p.row);}));
+  if(!targets.length){toast('처리할 건이 없어요.','ok');return;}
+  let ok=0;for(const r of targets){try{const {error}=await sb.rpc('fin_mark_proof',{p_id:r.id,p_received:true});if(!error){r.proofStatus='수취완료';ok++;}}catch(e){}}
+  await loadData();toast(ok+'건 증빙 수취완료 처리했어요.','ok');
+  const mb=document.getElementById('lg_markbtn');if(mb)mb.innerHTML='✅ 일치 건 수취완료 (0건)';
+}
+function exportLedger(){
+  if(!_LG)return;
+  loadXLSX().then(()=>{
+    const head=['거래처','날짜','구분','내용','금액','매칭'];const data=[];
+    _LG.groups.forEach(g=>{
+      [...g.gi.map(x=>({d:x.date,t:'매입계산서',c2:x.item,a:x.tot,ok:x.pair?'일치':'짝없음'})),...g.gp.map(x=>({d:x.date,t:'이체',c2:x.memo,a:x.amt,ok:x.pair?'일치':'짝없음'}))].sort((a,b)=>String(a.d).localeCompare(String(b.d))).forEach(r=>data.push([g.name,r.d,r.t,r.c2,r.a,r.ok]));
+      data.push([g.name+' 소계','','','계산서 '+g.iSum+' / 이체 '+g.pSum,g.diff,g.diff===0?'OK':'차액']);data.push([]);
+    });
+    const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:24},{wch:11},{wch:11},{wch:42},{wch:13},{wch:10}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'매입대조원장');XLSX.writeFile(wb,'매입대조원장_'+today()+'.xlsx');
+  });
+}
 /* 입금확인 엑셀 가져오기 — 세금계산서 시트에서 입금일·실제입금액·내용을 읽어 발행 건과 매칭 */
 function openDepositImport(){
   if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}
