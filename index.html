@@ -424,7 +424,10 @@ const PROOF_TYPES=[['세금계산서','세금계산서 (매입)'],['현금영수
 const PROOF_ADEQ=new Set(['세금계산서','현금영수증','계산서']); // 홈택스 확인 대상 → 받을예정/수취완료 추적
 const PROOF_LABEL={'세금계산서':'세금계산서 (매입)','현금영수증':'현금영수증 (지출증빙)','계산서':'계산서 (면세)','카드전표':'신용카드 전표','명세서':'거래명세서·영수증','none':'증빙 없음'};
 function needsProof(r){return !!(r&&PROOF_ADEQ.has(r.proofType)&&r.proofStatus!=='수취완료'&&r.status!=='canceled'&&r.status!=='rejected');}
-function proofDeadline(d){if(!d)return null;const x=new Date(d);return new Date(x.getFullYear(),x.getMonth()+1,10);} // 작성일 기준 익월 10일
+/* 공휴일 (매년 10일 전후에 영향 줄 수 있는 날 포함, 2026~2027) — 기한이 주말·공휴일이면 다음 영업일로 연장 */
+const KR_HOLIDAYS=new Set(['2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-03-01','2026-03-02','2026-05-05','2026-05-24','2026-05-25','2026-06-06','2026-08-15','2026-08-17','2026-09-24','2026-09-25','2026-09-26','2026-10-03','2026-10-05','2026-10-09','2026-12-25','2027-01-01','2027-02-06','2027-02-07','2027-02-08','2027-02-09','2027-03-01','2027-05-05','2027-05-13','2027-06-06','2027-08-15','2027-08-16','2027-09-14','2027-09-15','2027-09-16','2027-10-03','2027-10-04','2027-10-09','2027-10-11','2027-12-25']);
+function nextBizDay(dt){const d=new Date(dt);for(let i=0;i<14;i++){const ymd=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const wd=d.getDay();if(wd!==0&&wd!==6&&!KR_HOLIDAYS.has(ymd))return d;d.setDate(d.getDate()+1);}return d;}
+function proofDeadline(d){if(!d)return null;const x=new Date(d);return nextBizDay(new Date(x.getFullYear(),x.getMonth()+1,10));} // 작성일 기준 익월 10일 (휴일이면 다음 영업일)
 function proofOverdue(r){if(!needsProof(r))return false;const dl=proofDeadline(r.proofDate);return !!dl&&new Date(today())>dl;}
 /* ── 빌리쇼핑 쿠폰 ── */
 const COUPON_AMOUNT=30000;
@@ -1565,7 +1568,7 @@ function exportExpenseList(named){
   }).catch(()=>toast('엑셀 로드 실패','err'));
 }
 /* ===================== 세금계산서 ===================== */
-function invoiceDeadline(w){if(!w)return null;const d=new Date(w);return new Date(d.getFullYear(),d.getMonth()+1,10);}
+function invoiceDeadline(w){if(!w)return null;const d=new Date(w);return nextBizDay(new Date(d.getFullYear(),d.getMonth()+1,10));} /* 익월 10일, 휴일이면 다음 영업일 */
 function deadlineBadge(w){const dl=invoiceDeadline(w);if(!dl)return '';const left=Math.round((dl-new Date(today()))/86400000);if(left<0)return `<span class="flag warn" title="익월 10일 초과 — 가산세">⛔ 발행기한 초과</span>`;if(left<=3)return `<span class="flag caution" title="익월 10일까지">⏰ 발행기한 D-${left}</span>`;return '';}
 function renderInvoice(){
   const c=document.getElementById('content');
@@ -1696,7 +1699,22 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
   if(editId){const old=DB.invoice.find(x=>x.id===editId);if(old&&old.requester){ipl.requester_name=old.requester;ipl.team=old.team;r.requester=old.requester;r.team=old.team;}} /* 관리자가 남의 요청 수정 시 원래 신청인 유지 */
   /* 수정 모드: 기존 요청을 먼저 반려(사유: 수정으로 재등록) 처리하고 새로 등록 — 서버가 취소 상태 미지원 */
   let pr=editId?sv('fin_decide_invoice',{p_id:editId,p_status:'rejected',p_reason:'수정으로 재등록'},()=>{const old=DB.invoice.find(x=>x.id===editId);if(old){old.status='rejected';old.rejectReason='수정으로 재등록';}}):Promise.resolve();
-  pr.then(()=>sv('fin_submit_invoice',{p:ipl},()=>{DB.invoice.unshift(r);}))
+  pr.then(async()=>{
+      if(!IS_SUPA){DB.invoice.unshift(r);return;}
+      const {data,error}=await sb.rpc('fin_submit_invoice',{p:ipl});
+      if(!error)return loadData();
+      /* 서버는 휴일 연장을 몰라 익월 10일로 거부 — 기한 내(휴일 연장 반영)면 관리자 권한으로 작성일 보정 등록 */
+      if(/기한|발행/.test(error.message||'')&&canApprove()){
+        const alt=Object.assign({},ipl,{writeDate:today()});
+        const r2=await sb.rpc('fin_submit_invoice',{p:alt});
+        if(r2.error){toast(r2.error.message||'오류가 났어요','err');throw r2.error;}
+        const nid=(r2.data&&r2.data.id)||r2.data;
+        await sb.from('fin_invoices').update({write_date:ipl.writeDate}).eq('id',nid);
+        return loadData();
+      }
+      if(/기한|발행/.test(error.message||'')){toast('기한(휴일 연장) 건이라 서버 검증에 걸렸어요. 재무팀(정채영)에게 등록을 요청해주세요.','err');throw error;}
+      toast(error.message||'오류가 났어요','err');throw error;
+    })
     .then(()=>{_invSubmitting=false;_editInvoiceId=null;closeModal();render();toast(editId?'발행 요청을 수정했어요. (기존 요청은 취소 처리)':'발행 요청을 등록했어요.','ok');})
     .catch(()=>{_invSubmitting=false;const b=document.querySelector('#ov .modal-foot .btn-primary');if(b)b.disabled=false;});
 }
