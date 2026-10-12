@@ -1699,7 +1699,16 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
   const ipl=invoicePayload(r);
   if(editId){const old=DB.invoice.find(x=>x.id===editId);if(old&&old.requester){ipl.requester_name=old.requester;ipl.team=old.team;r.requester=old.requester;r.team=old.team;}} /* 관리자가 남의 요청 수정 시 원래 신청인 유지 */
   /* 수정 모드: 기존 요청을 먼저 반려(사유: 수정으로 재등록) 처리하고 새로 등록 — 서버가 취소 상태 미지원 */
-  let pr=editId?sv('fin_decide_invoice',{p_id:editId,p_status:'rejected',p_reason:'수정으로 재등록'},()=>{const old=DB.invoice.find(x=>x.id===editId);if(old){old.status='rejected';old.rejectReason='수정으로 재등록';}}):Promise.resolve();
+  let pr=Promise.resolve();
+  if(editId){
+    const old=DB.invoice.find(x=>x.id===editId);
+    if(old&&old.status==='rejected'){ /* 이미 반려된 건 수정 → 기존 건은 사유만 바꿔 숨김 (실패해도 진행) */
+      if(IS_SUPA)pr=sb.from('fin_invoices').update({reject_reason:'수정으로 재등록'}).eq('id',editId).then(()=>{},()=>{});
+      else{old.rejectReason='수정으로 재등록';}
+    }else{
+      pr=sv('fin_decide_invoice',{p_id:editId,p_status:'rejected',p_reason:'수정으로 재등록'},()=>{if(old){old.status='rejected';old.rejectReason='수정으로 재등록';}});
+    }
+  }
   pr.then(async()=>{
       if(!IS_SUPA){DB.invoice.unshift(r);return;}
       const {data,error}=await sb.rpc('fin_submit_invoice',{p:ipl});
@@ -1720,7 +1729,7 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
     .catch(()=>{_invSubmitting=false;const b=document.querySelector('#ov .modal-foot .btn-primary');if(b)b.disabled=false;});
 }
 let _invSubmitting=false,_editInvoiceId=null;
-function canEditInvoice(r){return r&&r.status==='requested'&&(r.requester===ME().name||canManageAll());} /* 작성자 본인 + 정채영, 발행완료 후 수정 불가 */
+function canEditInvoice(r){return r&&(r.status==='requested'||r.status==='rejected')&&(r.requester===ME().name||canManageAll());} /* 작성자 본인 + 정채영 — 발행대기·반려 건 수정 가능, 발행완료 후 불가 */
 function canDeleteInvoice(r){return r&&((r.requester===ME().name&&r.status!=='issued')||canManageAll());} /* 작성자: 본인 건(발행완료 전) / 정채영: 전체 */
 function batchDeleteInvoice(){
   if(!canManageAll()){toast('선택 삭제는 정채영님만 할 수 있어요.','err');return;}
@@ -1747,7 +1756,7 @@ function viewInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;cons
   let foot=`${invEditBtn}<button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')"><span>복제</span></button><button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
   if(canApprove()&&r.status==='requested')foot=`${invEditBtn}<button class="btn btn-danger" onclick="decideInvoice('${id}','rejected')">반려</button><button class="btn btn-primary" onclick="decideInvoice('${id}','issued')">발행완료</button>`;
   if(canApprove()&&r.status==='issued')foot=`<button class="btn btn-line btn-sm" onclick="revertInvoice('${id}')">발행대기로 되돌리기</button><button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')"><span>복제</span></button>${canDeposit()?`<button class="btn btn-primary" onclick="openDepositForm('${id}')">${depositOf(id)?'입금확인됨 ('+depositOf(id)+')':'입금확인'}</button>`:`<button class="btn btn-secondary" onclick="closeModal()">닫기</button>`}`;
-  if(canApprove()&&r.status==='rejected')foot=`<button class="btn btn-primary" onclick="revertInvoice('${id}')">발행대기로 되돌리기</button><button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')"><span>복제</span></button><button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
+  if(canApprove()&&r.status==='rejected')foot=`${invEditBtn}<button class="btn btn-primary" onclick="revertInvoice('${id}')">발행대기로 되돌리기</button><button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')"><span>복제</span></button><button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
   modal('세금계산서 발행 요청 상세','',`<div style="margin-bottom:10px">${deadlineBadge(r.writeDate)}</div><div class="dl"><dt>상태</dt><dd><span class="badge ${st[1]}">${st[0]}</span></dd><dt>요청일</dt><dd class="num">${escH(fmtD(r.appliedTs||r.applied)||'-')}</dd><dt>구분</dt><dd>${escH(r.saleType||'매출')}</dd><dt>상호</dt><dd>${escH(r.company)} (${escH(r.ceo)})</dd><dt>사업자번호</dt><dd class="num">${escH(r.bizNo)}</dd><dt>이메일</dt><dd>${escH(r.email)}</dd><dt>품목</dt><dd>${escH(r.itemName)}</dd><dt>작성일자</dt><dd>${escH(fmtD(r.writeDate))}</dd><dt>공급가액</dt><dd>${won(r.supply)}원</dd><dt>세액</dt><dd>${won(r.tax)}원</dd><dt>합계</dt><dd><b>${won(r.total)}원</b></dd><dt>신청인</dt><dd>${escH(r.requester||'-')}</dd><dt>팀</dt><dd>${escH(normalizeTeam(r.team)||'-')}</dd>${r.evidence?`<dt>증빙</dt><dd><a href="${escH(r.evidence)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">Dropbox 링크 ↗</a></dd>`:''}</div>`,foot);
 }
 function decideInvoice(id,status){sv('fin_decide_invoice',{p_id:id,p_status:status,p_reason:''},()=>{const r=DB.invoice.find(x=>x.id===id);if(r){r.status=status;if(status==='issued')r.issuedAt=today();}}).then(()=>{closeModal();render();toast(status==='issued'?'발행완료로 표시했어요.':'반려했어요.',status==='rejected'?'err':'ok');});}
