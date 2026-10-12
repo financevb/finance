@@ -1713,16 +1713,20 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
       if(!IS_SUPA){DB.invoice.unshift(r);return;}
       const {data,error}=await sb.rpc('fin_submit_invoice',{p:ipl});
       if(!error)return loadData();
-      /* 서버는 휴일 연장을 몰라 익월 10일로 거부 — 기한 내(휴일 연장 반영)면 관리자 권한으로 작성일 보정 등록 */
-      if(/기한|발행/.test(error.message||'')&&canApprove()){
+      /* 서버는 휴일 연장을 몰라 익월 10일로 거부 — 기한 내(휴일 연장 반영)면 작성일 보정 등록 시도 */
+      if(/기한|발행/.test(error.message||'')){
         const alt=Object.assign({},ipl,{writeDate:today()});
         const r2=await sb.rpc('fin_submit_invoice',{p:alt});
         if(r2.error){toast(r2.error.message||'오류가 났어요','err');throw r2.error;}
         const nid=(r2.data&&r2.data.id)||r2.data;
         await sb.from('fin_invoices').update({write_date:ipl.writeDate}).eq('id',nid);
-        return loadData();
+        const {data:chk}=await sb.from('fin_invoices').select('write_date').eq('id',nid).maybeSingle();
+        if(chk&&chk.write_date===ipl.writeDate)return loadData(); /* 보정 성공 */
+        /* 작성일 보정 권한이 없는 계정 — 방금 등록한 건 취소하고 안내 */
+        await sb.rpc('fin_decide_invoice',{p_id:nid,p_status:'rejected',p_reason:'삭제됨'});
+        await loadData();
+        toast('기한(휴일 연장) 건이라 서버 검증에 걸렸어요. 재무팀(정채영)에게 등록을 요청해주세요.','err');throw error;
       }
-      if(/기한|발행/.test(error.message||'')){toast('기한(휴일 연장) 건이라 서버 검증에 걸렸어요. 재무팀(정채영)에게 등록을 요청해주세요.','err');throw error;}
       toast(error.message||'오류가 났어요','err');throw error;
     })
     .then(()=>{_invSubmitting=false;_editInvoiceId=null;closeModal();render();toast(editId?'발행 요청을 수정했어요. (기존 요청은 취소 처리)':'발행 요청을 등록했어요.','ok');})
