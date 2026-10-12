@@ -426,9 +426,10 @@ const PROOF_LABEL={'세금계산서':'세금계산서 (매입)','현금영수증
 function needsProof(r){return !!(r&&PROOF_ADEQ.has(r.proofType)&&r.proofStatus!=='수취완료'&&r.status!=='canceled'&&r.status!=='rejected');}
 /* 공휴일 (매년 10일 전후에 영향 줄 수 있는 날 포함, 2026~2027) — 기한이 주말·공휴일이면 다음 영업일로 연장 */
 const KR_HOLIDAYS=new Set(['2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-03-01','2026-03-02','2026-05-05','2026-05-24','2026-05-25','2026-06-06','2026-08-15','2026-08-17','2026-09-24','2026-09-25','2026-09-26','2026-10-03','2026-10-05','2026-10-09','2026-12-25','2027-01-01','2027-02-06','2027-02-07','2027-02-08','2027-02-09','2027-03-01','2027-05-05','2027-05-13','2027-06-06','2027-08-15','2027-08-16','2027-09-14','2027-09-15','2027-09-16','2027-10-03','2027-10-04','2027-10-09','2027-10-11','2027-12-25']);
-function nextBizDay(dt){const d=new Date(dt);for(let i=0;i<14;i++){const ymd=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const wd=d.getDay();if(wd!==0&&wd!==6&&!KR_HOLIDAYS.has(ymd))return d;d.setDate(d.getDate()+1);}return d;}
+function _ymdOf(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function nextBizDay(dt){const d=new Date(dt);for(let i=0;i<14;i++){const ymd=_ymdOf(d);const wd=d.getDay();if(wd!==0&&wd!==6&&!KR_HOLIDAYS.has(ymd))return d;d.setDate(d.getDate()+1);}return d;}
 function proofDeadline(d){if(!d)return null;const x=new Date(d);return nextBizDay(new Date(x.getFullYear(),x.getMonth()+1,10));} // 작성일 기준 익월 10일 (휴일이면 다음 영업일)
-function proofOverdue(r){if(!needsProof(r))return false;const dl=proofDeadline(r.proofDate);return !!dl&&new Date(today())>dl;}
+function proofOverdue(r){if(!needsProof(r))return false;const dl=proofDeadline(r.proofDate);return !!dl&&today()>_ymdOf(dl);}
 /* ── 빌리쇼핑 쿠폰 ── */
 const COUPON_AMOUNT=30000;
 const COUPON_LINK='https://bit.ly/3S1QlI9';
@@ -1569,7 +1570,7 @@ function exportExpenseList(named){
 }
 /* ===================== 세금계산서 ===================== */
 function invoiceDeadline(w){if(!w)return null;const d=new Date(w);return nextBizDay(new Date(d.getFullYear(),d.getMonth()+1,10));} /* 익월 10일, 휴일이면 다음 영업일 */
-function deadlineBadge(w){const dl=invoiceDeadline(w);if(!dl)return '';const left=Math.round((dl-new Date(today()))/86400000);if(left<0)return `<span class="flag warn" title="익월 10일 초과 — 가산세">⛔ 발행기한 초과</span>`;if(left<=3)return `<span class="flag caution" title="익월 10일까지">⏰ 발행기한 D-${left}</span>`;return '';}
+function deadlineBadge(w){const dl=invoiceDeadline(w);if(!dl)return '';const left=Math.round((new Date(_ymdOf(dl))-new Date(today()))/86400000);if(left<0)return `<span class="flag warn" title="익월 10일 초과 — 가산세">⛔ 발행기한 초과</span>`;if(left<=3)return `<span class="flag caution" title="익월 10일까지">⏰ 발행기한 D-${left}</span>`;return '';}
 function renderInvoice(){
   const c=document.getElementById('content');
   let list=applySort(visible(DB.invoice,'invoice'),'invoice');
@@ -1689,7 +1690,7 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
   if(r.bizNo.length!==10){toast('사업자등록번호는 10자리예요.','err');return;}
   if(isLockedMonth(r.writeDate)){toast(r.writeDate.slice(0,7)+'은 마감되어 발행할 수 없어요.','err');return;}
   const dl=invoiceDeadline(r.writeDate);
-  if(dl&&new Date(today())>dl){toast('⛔ 작성일('+r.writeDate+') 기준 익월 10일이 지나 발행 불가예요 (가산세 대상).','err');return;}
+  if(dl&&today()>_ymdOf(dl)){toast('⛔ 작성일('+r.writeDate+') 기준 발행기한('+_ymdOf(dl)+')이 지나 발행 불가예요 (가산세 대상).','err');return;}
   r.approver=approverFor(r.requester,r.total);
   if(_invSubmitting)return;
   _invSubmitting=true;
