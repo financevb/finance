@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261012f'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261013a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -424,6 +424,8 @@ const ROLE_DEF={
 };
 let ROLE='finance';
 const ME=()=>(IS_SUPA&&SUPA_USER)?SUPA_USER:ROLE_DEF[ROLE];
+/* 본인(작성자) 판정 — 이메일 일치(대소문자 무시) 또는 이름 일치(공백 무시). 이름 표기가 조금 달라도 이메일로 본인 확인됨 */
+function isMine(r){if(!r)return false;const me=ME();const em=String(me.email||'').trim().toLowerCase();const rem=String(r.requesterEmail||'').trim().toLowerCase();if(em&&rem&&rem===em)return true;const nn=s=>String(s||'').replace(/\s+/g,'');return !!nn(me.name)&&nn(r.requester)===nn(me.name);}
 const canViewAll=()=>['viewer','finance','exec'].includes(ROLE);
 const canApprove=()=>['finance','exec','viewer'].includes(ROLE); // 처리(지급완료/반려/상태변경 등) = 데모 재무·데모 대표·데모 조회(admin 3인)
 const canReject=()=>canApprove()&&ME().name==='정채영'; // 이체 반려는 정채영만 가능
@@ -632,7 +634,7 @@ function colwVar(key){return (COLW[key]||300)+'px';}
   document.addEventListener('mouseup',function(){if(!d)return;var el=document.querySelector('.rzh.drag');if(el)el.classList.remove('drag');document.body.style.cursor='';try{localStorage.setItem('fin_colw',JSON.stringify(COLW))}catch(e){}d=null;});
 })();
 function inPeriod(d){if(PERIOD==='all')return true;if(!d)return false;const now=today();if(PERIOD==='ytd')return d.slice(0,4)===(PYR||now.slice(0,4));if(PERIOD==='month')return d.slice(0,7)===(PYM||now.slice(0,7));if(PERIOD==='custom')return (!PFROM||d>=PFROM)&&(!PTO||d<=PTO);return true;}
-function roleScope(arr){if(IS_SUPA)return arr.slice();/* 실모드는 서버 RLS가 가시성 처리 */if(canViewAll())return arr.slice();if(ROLE==='lead')return arr.filter(r=>r.team===ME().team);return arr.filter(r=>r.requester===ME().name);}
+function roleScope(arr){if(IS_SUPA)return arr.slice();/* 실모드는 서버 RLS가 가시성 처리 */if(canViewAll())return arr.slice();if(ROLE==='lead')return arr.filter(r=>r.team===ME().team);return arr.filter(r=>isMine(r));}
 function visible(arr,kind){
   let list=roleScope(arr);
   if(PERIOD!=='all'){
@@ -1104,8 +1106,8 @@ function submitFuel(){
   sv('fin_submit_payout',{p:payoutPayload(r,0)},()=>{DB.payout.unshift(r);}).then(()=>{closeModal();current='payout';render();toast('유류비 신청을 등록했어요.','ok');});
 }
 function clonePayout(id){const r=DB.payout.find(x=>x.id===id);if(!r)return;openPayoutForm({payee:r.payee,bank:r.bank,account:r.account,amount:r.amount,unit:r.unit,category:r.category,purpose:r.purpose,proofType:r.proofType});toast('과거 요청을 복제했어요.','ok');}
-function canEditPayout(r){return r&&r.status==='requested'&&!r.fuel&&r.category!=='유류비'&&!r.wh&&(r.requester===ME().name||canManageAll());}
-function canDeletePayout(r){return r&&((r.requester===ME().name&&r.status!=='paid')||canManageAll());} /* 작성자: 본인 건(지급완료 전) / 정채영: 전체 */
+function canEditPayout(r){return r&&r.status==='requested'&&!r.fuel&&r.category!=='유류비'&&!r.wh&&(isMine(r)||canManageAll());}
+function canDeletePayout(r){return r&&((isMine(r)&&r.status!=='paid')||canManageAll());} /* 작성자: 본인 건(지급완료 전) / 정채영: 전체 */
 function batchDeletePayout(){
   if(!canManageAll()){toast('선택 삭제는 정채영님만 할 수 있어요.','err');return;}
   const ss=DB.payout.filter(r=>_sel.has(r.id)&&r.status!=='canceled');
@@ -1340,7 +1342,7 @@ function expSumBar(list,named){
 function expRowActions(r){
   let h='<td><div class="rowact">';
   h+=`<button class="iconbtn" title="복제" onclick="event.stopPropagation();cloneExpense('${r.id}')">${I.copy}</button>`;
-  if(r.requester===ME().name&&r.status==='requested')h+=`<button class="iconbtn" title="철회" onclick="event.stopPropagation();cancelExpense('${r.id}')">${I.trash}</button>`;
+  if(isMine(r)&&r.status==='requested')h+=`<button class="iconbtn" title="철회" onclick="event.stopPropagation();cancelExpense('${r.id}')">${I.trash}</button>`;
   return h+'</div></td>';
 }
 function expStatusCell(r,admin){
@@ -1772,8 +1774,8 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
     .catch(()=>{_invSubmitting=false;const b=document.querySelector('#ov .modal-foot .btn-primary');if(b)b.disabled=false;});
 }
 let _invSubmitting=false,_editInvoiceId=null;
-function canEditInvoice(r){return r&&(r.status==='requested'||r.status==='rejected')&&(r.requester===ME().name||canManageAll());} /* 작성자 본인 + 정채영 — 발행대기·반려 건 수정 가능, 발행완료 후 불가 */
-function canDeleteInvoice(r){return r&&((r.requester===ME().name&&r.status!=='issued')||canManageAll());} /* 작성자: 본인 건(발행완료 전) / 정채영: 전체 */
+function canEditInvoice(r){return r&&(r.status==='requested'||r.status==='rejected')&&(isMine(r)||canManageAll());} /* 작성자 본인 + 정채영 — 발행대기·반려 건 수정 가능, 발행완료 후 불가 */
+function canDeleteInvoice(r){return r&&((isMine(r)&&r.status!=='issued')||canManageAll());} /* 작성자: 본인 건(발행완료 전) / 정채영: 전체 */
 function batchDeleteInvoice(){
   if(!canManageAll()){toast('선택 삭제는 정채영님만 할 수 있어요.','err');return;}
   const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!(r.status==='rejected'&&/^(삭제됨|수정으로 재등록)$/.test(r.rejectReason||'')));
@@ -2172,9 +2174,9 @@ function exportVendors(){loadXLSX().then(function(){const head=['거래처','사
 /* ===================== 빌리쇼핑 쿠폰 ===================== */
 function renderCoupon(){
   const c=document.getElementById('content');const admin=canApprove();
-  let list=(canViewAll()?DB.coupons:DB.coupons.filter(r=>r.requester===ME().name)).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  let list=(canViewAll()?DB.coupons:DB.coupons.filter(r=>isMine(r))).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
   if(_q){const q=_q.toLowerCase();list=list.filter(r=>((r.name||'')+(r.phone||'')+(r.code||'')+(r.requester||'')).toLowerCase().includes(q));}
-  const mineMonth=DB.coupons.filter(r=>r.requester===ME().name&&(r.status==='issued'||r.status==='pending')&&String(r.createdAt||'').slice(0,7)===today().slice(0,7)).length;
+  const mineMonth=DB.coupons.filter(r=>isMine(r)&&(r.status==='issued'||r.status==='pending')&&String(r.createdAt||'').slice(0,7)===today().slice(0,7)).length;
   const pend=DB.coupons.filter(r=>r.status==='pending');const stock=couponStock();
   let h=`<div class="sumbar"><div class="sb-seg"><span>내 이번달 발급</span> <b>${mineMonth}건</b> <span class="t-sub">· 3회째부터 승인</span></div>${admin?`<div class="sb-seg"><span>코드 재고</span> <b style="${stock<3?'color:var(--sys-red)':''}">${stock}장</b></div><div class="sb-seg"><span>승인 보류</span> <b>${pend.length}건</b></div>`:''}</div>`;
   if(admin&&stock<3)h+=`<div class="todo warn" style="margin-bottom:12px">⚠️ 쿠폰 코드 재고가 <b>${stock}장</b> 남았어요. 우측 상단 "코드 추가"로 채워주세요.</div>`;
@@ -2186,7 +2188,7 @@ function renderCoupon(){
   h+=`<div class="filters"><div class="search">${I.search}<input placeholder="수령인·휴대폰·코드 검색" value="${escH(_q)}" oninput="onSearchInput(this)" oncompositionstart="onSearchCompStart()" oncompositionend="onSearchCompEnd(this)"></div></div>`;
   if(!list.length){h+=`<div class="card"><div class="empty">${I.m_coupon}<div>발급 이력이 없어요. "새 쿠폰 발급"으로 시작하세요.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl"><thead><tr><th>수령인</th><th class="mhide">휴대폰</th><th>쿠폰번호</th><th class="mhide">신청인</th><th class="mhide">신청일</th><th>상태</th><th></th></tr></thead><tbody>';
-  list.forEach(r=>{const st=CSTATUS[r.status]||['?',''];const showFull=admin||r.requester===ME().name;
+  list.forEach(r=>{const st=CSTATUS[r.status]||['?',''];const showFull=admin||isMine(r);
     const codeCell=r.code?(showFull?`<span class="num" style="font-weight:700;letter-spacing:.5px">${escH(r.code)}</span>`:`<span class="num t-sub">••••${escH(r.code.slice(-4))}</span>`):'<span class="t-sub">–</span>';
     h+=`<tr><td class="nmcell"><div class="t-name">${escH(r.name)}</div>${r.isOverride?'<span class="tag tag-blue">강제발급</span>':''}${r.memo?`<div class="t-sub">${escH(r.memo)}</div>`:''}</td><td class="mhide t-sub num">${escH(fmtPhone(r.phone))}</td><td>${codeCell}</td><td class="mhide t-sub nmcell">${r.requester?nameWrap(r.requester):'-'}</td><td class="mhide t-sub num">${escH(String(r.createdAt||'').slice(0,10))}</td><td><span class="badge ${st[1]}">${st[0]}</span></td><td><div class="rowact">${r.status==='issued'&&r.code&&showFull?`<button class="btn btn-sm btn-primary" onclick="couponMsgModal('${r.id}')">메시지 복사</button>`:''}${admin&&r.status==='issued'?`<button class="iconbtn" title="무효 처리" onclick="couponVoid('${r.id}')">${I.trash}</button>`:''}</div></td></tr>`;
   });
@@ -2215,7 +2217,7 @@ function submitCoupon(){
 function mockCouponRequest(p){
   const norm=normPhone(p.phone);
   if(!p.override&&DB.coupons.some(r=>r.phoneNorm===norm&&r.status==='issued'))return {error:'이미 쿠폰이 발급된 번호입니다 (휴대폰 기준 1인 1회).'};
-  const monthCnt=DB.coupons.filter(r=>r.requester===ME().name&&(r.status==='issued'||r.status==='pending')&&String(r.createdAt||'').slice(0,7)===today().slice(0,7)).length;
+  const monthCnt=DB.coupons.filter(r=>isMine(r)&&(r.status==='issued'||r.status==='pending')&&String(r.createdAt||'').slice(0,7)===today().slice(0,7)).length;
   let status='issued',hold='',code='';
   if(!p.override&&monthCnt>=2){status='pending';hold='월 3회 초과 — 관리자 승인 필요';}
   else{const av=DB.couponCodes.find(x=>x.status==='available');if(!av){status='pending';hold='코드 재고 없음 — 관리자 추가 후 발급';}else{av.status='issued';code=av.code;}}
