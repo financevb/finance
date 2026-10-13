@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261013a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261013b'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1742,7 +1742,7 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
       if(IS_SUPA)pr=sb.from('fin_invoices').update({reject_reason:'수정으로 재등록'}).eq('id',editId).then(()=>{},()=>{});
       else{old.rejectReason='수정으로 재등록';}
     }else{
-      pr=sv('fin_decide_invoice',{p_id:editId,p_status:'rejected',p_reason:'수정으로 재등록'},()=>{if(old){old.status='rejected';old.rejectReason='수정으로 재등록';}});
+      pr=_retireInvoice(editId,'수정으로 재등록').then(()=>{if(old){old.status='rejected';old.rejectReason='수정으로 재등록';}});
     }
   }
   pr.then(async()=>{
@@ -1763,7 +1763,7 @@ function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat
         const {data:chk}=await sb.from('fin_invoices').select('write_date,total').eq('id',nid).maybeSingle();
         const okFix=chk&&(!usedToday||chk.write_date===ipl.writeDate)&&(!neg||Number(chk.total)===Number(ipl.total));
         if(!okFix){ /* 보정 권한 없는 계정 — 방금 등록분 정리 후 안내 */
-          await sb.rpc('fin_decide_invoice',{p_id:nid,p_status:'rejected',p_reason:'삭제됨'});
+          await _retireInvoice(nid,'삭제됨').catch(()=>{});
           await loadData();
           toast((neg?'마이너스 발행':'기한(휴일 연장) 건')+'은 서버 검증에 걸렸어요. 재무팀(정채영)에게 등록을 요청해주세요.','err');throw new Error('fix-failed');
         }
@@ -1788,14 +1788,24 @@ function batchDeleteInvoice(){
     else{ss.forEach(r=>{r.status='rejected';r.rejectReason='삭제됨';});_sel=new Set();closeModal();render();toast(ss.length+'건 삭제했어요.','ok');}
   });
 }
+/* 발행 요청을 반려(사유 지정)로 돌려 목록에서 숨김 — 승인자 RPC → 안 되면 본인 행 직접 수정 순으로 시도 */
+async function _retireInvoice(id,reason){
+  if(!IS_SUPA){const x=DB.invoice.find(y=>y.id===id);if(x){x.status='rejected';x.rejectReason=reason;}return;}
+  const r1=await sb.rpc('fin_decide_invoice',{p_id:id,p_status:'rejected',p_reason:reason});
+  if(!r1.error)return;
+  const r2=await sb.from('fin_invoices').update({status:'rejected',reject_reason:reason}).eq('id',id).select('id');
+  if(!r2.error&&r2.data&&r2.data.length)return;
+  toast('서버 권한 때문에 본인 계정으로는 처리할 수 없어요. 재무팀(정채영)에게 요청해주세요.','err');
+  throw new Error('retire-failed');
+}
 function deleteInvoice(id){
   const r=DB.invoice.find(x=>x.id===id);if(!canDeleteInvoice(r))return;
   /* 서버가 취소 상태를 지원하지 않아 반려(사유: 삭제됨)로 처리하고 목록에서 숨김 */
   confirmModal('🗑 발행 요청 삭제',`<b>${escH(r.company)}</b> · ${won(r.total)}원<br><br>이 발행 요청을 목록에서 삭제할까요?`,()=>{
-    const pr=(IS_SUPA&&r.status==='rejected')
-      ?sb.from('fin_invoices').update({reject_reason:'삭제됨'}).eq('id',id).then(({error})=>{if(error){toast(error.message,'err');throw error;}return loadData();})
-      :sv('fin_decide_invoice',{p_id:id,p_status:'rejected',p_reason:'삭제됨'},()=>{const x=DB.invoice.find(y=>y.id===id);if(x){x.status='rejected';x.rejectReason='삭제됨';}});
-    pr.then(()=>{closeModal();render();toast('삭제했어요.','ok');}).catch(()=>{});
+    _retireInvoice(id,'삭제됨')
+      .then(()=>{const x=DB.invoice.find(y=>y.id===id);if(x){x.status='rejected';x.rejectReason='삭제됨';}return IS_SUPA?loadData():null;})
+      .then(()=>{closeModal();render();toast('삭제했어요.','ok');})
+      .catch(()=>{});
   });
 }
 function editInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!canEditInvoice(r))return;openInvoiceForm({editId:id,company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:r.writeDate,itemName:r.itemName,supply:r.supply,tax:r.tax,evidence:r.evidence});}
