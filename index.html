@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016d'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016e'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -876,6 +876,88 @@ async function ownerSync(){
   await loadData();render();
   toast('작성자 연결 완료 — 이체 '+pay+'건 · 계산서 '+inv+'건'+(errs.length?' · 실패: '+errs.join(','):''),'ok');
 }
+/* ---------- [임시] 엑셀 요청일자 보정 도구 (정채영 전용) ---------- */
+/* 사이트의 이체요청일(created_at)을 엑셀 리스트의 요청일자와 같게 맞춤. 보정이 끝나면 호출 버튼만 지우면 됨. */
+const _rdN=s=>String(s==null?'':s).replace(/\s+/g,'');
+const _rdD=s=>String(s==null?'':s).replace(/[^0-9]/g,'');
+let _RD=null;
+function openReqDateFix(){
+  if(!canManageAll())return;
+  modal('📅 엑셀 요청일자로 맞추기','wide','<div class="policy" style="margin-bottom:12px"><b>이 도구는?</b><div style="margin-top:6px">사이트의 <b>이체요청일</b>을 엑셀 리스트의 <b>요청일자</b>와 같게 고칩니다.<br>아래에서 <b>요청일자_엑셀15.json</b> 파일을 선택하면, 먼저 <b>몇 건이 어떻게 바뀌는지만</b> 보여줍니다. 실제 반영은 그 다음 버튼을 눌러야 시작돼요.</div></div>'
+    +'<div class="form-row"><label>요청일자 파일 선택 (.json)</label><input class="input" type="file" id="rd_file" accept=".json,application/json" onchange="rdLoad(this)"></div>'
+    +'<div id="rd_out"></div>','<button class="btn btn-secondary" onclick="closeModal()">닫기</button>');
+}
+function rdLoad(el){
+  const f=el.files&&el.files[0];if(!f)return;
+  const o=document.getElementById('rd_out');o.innerHTML='<div class="t-sub">파일 읽는 중…</div>';
+  const fr=new FileReader();
+  fr.onload=()=>{try{const rows=JSON.parse(fr.result);if(!Array.isArray(rows))throw 0;rdPlan(rows);}catch(e){o.innerHTML='<div class="t-sub" style="color:var(--red)">파일을 읽을 수 없어요. 제가 드린 .json 파일인지 확인해주세요.</div>';}};
+  fr.readAsText(f);
+}
+/* 엑셀 행 ↔ 사이트 행 짝짓기: 1) 계좌+금액+예금주+적요 2) 계좌+금액+예금주 3) 금액+예금주+적요 */
+function rdPlan(rows){
+  const xk=[o=>o.ac?o.ac+'|'+o.a+'|'+o.p+'|'+o.r:'',o=>o.ac?o.ac+'|'+o.a+'|'+o.p:'',o=>o.a+'|'+o.p+'|'+o.r];
+  const dk=[r=>{const a=_rdD(r.account);return a?a+'|'+r.amount+'|'+_rdN(r.payee)+'|'+_rdN(purposeText(r)):'';},
+            r=>{const a=_rdD(r.account);return a?a+'|'+r.amount+'|'+_rdN(r.payee):'';},
+            r=>r.amount+'|'+_rdN(r.payee)+'|'+_rdN(purposeText(r))];
+  const used=new Set();const plan=[];let pend=rows.filter(o=>o&&o.d&&o.a).slice();
+  pend.sort((x,y)=>String(x.d).localeCompare(String(y.d)));
+  for(let s=0;s<xk.length;s++){
+    const idx={};
+    DB.payout.forEach(r=>{if(used.has(r.id))return;const k=dk[s](r);if(!k)return;(idx[k]=idx[k]||[]).push(r);});
+    Object.keys(idx).forEach(k=>idx[k].sort((a,b)=>String(a.applied).localeCompare(String(b.applied))));
+    const left=[];
+    pend.forEach(o=>{
+      const k=xk[s](o);const a=k?idx[k]:null;let hit=null;
+      if(a){while(a.length){const c=a.shift();if(!used.has(c.id)){hit=c;break;}}}
+      if(hit){used.add(hit.id);plan.push({id:hit.id,from:hit.applied||'',to:o.d,payee:hit.payee,amount:hit.amount,purpose:purposeText(hit)||'',way:s+1});}
+      else left.push(o);
+    });
+    pend=left;
+  }
+  const same=plan.filter(p=>p.from===p.to);
+  const chg=plan.filter(p=>p.from!==p.to).map(p=>{p.gap=Math.abs(daysBetween(p.to,p.from));return p;});
+  const near=chg.filter(p=>p.gap<=7);
+  _RD={chg:chg,near:new Set(near.map(p=>p.id))};
+  const noSite=pend.length,noXls=DB.payout.length-plan.length;
+  const rowsHtml=chg.slice(0,15).map(p=>'<tr><td>'+escH(p.payee)+'</td><td class="num">'+won(p.amount)+'</td><td class="num">'+escH(fmtD(p.from))+' → <b>'+escH(fmtD(p.to))+'</b></td><td class="t-sub">'+escH(p.purpose.slice(0,22))+'</td></tr>').join('');
+  document.getElementById('rd_out').innerHTML=
+    '<div class="dl" style="margin-bottom:12px"><dt>엑셀 건수</dt><dd class="num">'+rows.length+'건</dd>'
+    +'<dt>사이트와 짝지어진 건</dt><dd class="num">'+plan.length+'건</dd>'
+    +'<dt>날짜 이미 같음</dt><dd class="num">'+same.length+'건</dd>'
+    +'<dt><b>바꿀 건</b></dt><dd class="num"><b style="color:var(--billy-pink-deep)">'+chg.length+'건</b> (이 중 7일 이내 차이 '+near.length+'건)</dd>'
+    +'<dt>엑셀에만 있음</dt><dd class="num">'+noSite+'건</dd><dt>사이트에만 있음</dt><dd class="num">'+noXls+'건</dd></div>'
+    +(chg.length?'<div class="tbl-wrap" style="max-height:230px;overflow:auto"><table class="tbl"><thead><tr><th>예금주</th><th>금액</th><th>요청일 변경</th><th>적요</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div><div class="t-sub" style="margin:7px 0 12px">위는 앞 15건 미리보기입니다.</div>'
+      +'<label style="display:flex;align-items:center;gap:7px;font-size:12.5px;margin-bottom:10px"><input type="checkbox" id="rd_skipnear"> 날짜 차이가 <b>7일 이내</b>인 '+near.length+'건은 그대로 두기 (사이트에서 직접 등록한 건 보호)</label>'
+      +'<div style="display:flex;gap:7px;flex-wrap:wrap"><button class="btn btn-sm btn-line" onclick="rdBackup()">① 변경 전 날짜 백업 내려받기</button><button class="btn btn-sm btn-line" onclick="rdApply(1)">② 1건만 시험 적용</button><button class="btn btn-sm btn-primary" onclick="rdApply(0)">③ 전체 적용</button></div>'
+      +'<div id="rd_prog" class="t-sub" style="margin-top:10px"></div>'
+      :'<div class="t-sub">바꿀 건이 없어요.</div>');
+}
+function rdList(){const sk=document.getElementById('rd_skipnear');const on=sk&&sk.checked;return _RD.chg.filter(p=>!(on&&_RD.near.has(p.id)));}
+function rdBackup(){
+  const list=rdList();
+  const txt='id,예금주,금액,변경전요청일,변경후요청일\n'+list.map(p=>[p.id,'"'+String(p.payee).replace(/"/g,'')+'"',p.amount,p.from,p.to].join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+txt],{type:'text/csv;charset=utf-8'}));a.download='요청일자_변경전백업.csv';document.body.appendChild(a);a.click();a.remove();
+  toast('백업 파일을 내려받았어요.','ok');
+}
+async function rdApply(onlyOne){
+  if(!_RD||!IS_SUPA)return;
+  const list=onlyOne?rdList().slice(0,1):rdList();
+  if(!list.length){toast('적용할 건이 없어요.');return;}
+  const pg=document.getElementById('rd_prog');
+  let ok=0,fail=0,errMsg='';
+  for(let i=0;i<list.length;i++){
+    const p=list[i];
+    const res=await sb.from('fin_payouts').update({created_at:p.to+'T09:00:00+09:00'}).eq('id',p.id).select('id');
+    if(res.error){fail++;if(!errMsg)errMsg=res.error.message;}
+    else if(!res.data||!res.data.length){fail++;if(!errMsg)errMsg='권한이 없어 수정되지 않았어요 (바뀐 행 0건).';}
+    else ok++;
+    if(pg&&(i%10===0||i===list.length-1))pg.innerHTML='진행 '+(i+1)+'/'+list.length+' · 성공 '+ok+' · 실패 '+fail;
+  }
+  await loadData();render();
+  if(pg)pg.innerHTML='<b>완료 — 성공 '+ok+'건 · 실패 '+fail+'건</b>'+(errMsg?'<br>실패 이유: '+escH(errMsg):'');
+  toast(onlyOne?'시험 1건 적용 — 성공 '+ok+' · 실패 '+fail:'요청일자 보정 완료 — 성공 '+ok+'건 · 실패 '+fail+'건',fail?'err':'ok');
+}
 function renderDashboard(){
   const c=document.getElementById('content');
   const EXCLUDE_TEAMS=new Set(['사채업자','글로벌','앱팀 (재미팀)','앱 (재미)']);
@@ -892,7 +974,7 @@ function renderDashboard(){
   const teamArr=Object.entries(teams).sort((a,b)=>b[1].sum-a[1].sum);const tmax=Math.max(1,...teamArr.map(t=>t[1].sum));
   const vend={};krw.forEach(r=>{(vend[r.payee]=vend[r.payee]||0);vend[r.payee]+=r.amount;});
   const vtop=Object.entries(vend).sort((a,b)=>b[1]-a[1]).slice(0,5);const vmax=Math.max(1,...vtop.map(v=>v[1]));
-  let h=todoBanner()+`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">${periodSel().replace(/ style="margin-bottom:14px"/,'')}${canApprove()?`<button class="btn btn-sm ${LOCKED.has(today().slice(0,7))?'btn-danger':'btn-secondary'}" onclick="toggleLock('${today().slice(0,7)}')">${LOCKED.has(today().slice(0,7))?'🔒 '+today().slice(0,7)+' 마감됨 — 해제':today().slice(0,7)+' 마감하기'}</button>`:''}${canManageAll()?`<button class="btn btn-sm btn-line" onclick="ownerSync()" title="엑셀에서 가져온 건들을 실제 작성자 계정과 연결해요 (작성자가 사이트에 한 번이라도 직접 등록한 적 있어야 연결 가능). 새 팀원이 사이트를 쓰기 시작하면 다시 눌러주세요.">👥 임포트 건 작성자 연결</button>`:''}</div>`;
+  let h=todoBanner()+`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">${periodSel().replace(/ style="margin-bottom:14px"/,'')}${canApprove()?`<button class="btn btn-sm ${LOCKED.has(today().slice(0,7))?'btn-danger':'btn-secondary'}" onclick="toggleLock('${today().slice(0,7)}')">${LOCKED.has(today().slice(0,7))?'🔒 '+today().slice(0,7)+' 마감됨 — 해제':today().slice(0,7)+' 마감하기'}</button>`:''}${canManageAll()?`<button class="btn btn-sm btn-line" onclick="ownerSync()" title="엑셀에서 가져온 건들을 실제 작성자 계정과 연결해요 (작성자가 사이트에 한 번이라도 직접 등록한 적 있어야 연결 가능). 새 팀원이 사이트를 쓰기 시작하면 다시 눌러주세요.">👥 임포트 건 작성자 연결</button><button class="btn btn-sm btn-line" onclick="openReqDateFix()" title="엑셀 리스트의 요청일자와 사이트의 이체요청일을 같게 맞춰요.">📅 요청일자 보정</button>`:''}</div>`;
   h+=`<div class="kpis dash">
     <div class="kpi blue click" onclick="landing('payout',{})"><div class="lbl">이체 요청(원화 합계)</div><div class="val">${won(totalAmt)}<span style="font-size:13px">원</span></div></div>
     <div class="kpi orange click" onclick="landing('payout',{status:'requested'})"><div class="lbl">지급 대기</div><div class="val">${pending.length}건</div></div>
