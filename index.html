@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016l'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016m'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -764,7 +764,7 @@ function buildNav(){
   const _mn=document.getElementById('mnav');if(_mn)_mn.innerHTML=mh;
 }
 function go(k){if((k==='expense'||k==='cardreport')&&IS_SUPA&&!EXPENSE_READY)k='dashboard';current=k;_sel=new Set();_q='';_filterOpen=false;_page=1;clearFilter();render();}
-function landing(page,opts){clearFilter();opts=opts||{};if(opts.team)FILTER.teams.add(opts.team);if(opts.status)FILTER.statuses.add(opts.status);if(opts.big)FILTER.big=true;if(opts.anomaly)FILTER.anomaly=true;if(opts.payee)_q=opts.payee;current=page;_sel=new Set();_filterOpen=true;render();}
+function landing(page,opts){clearFilter();opts=opts||{};if(opts.all)PERIOD='all';if(opts.team)FILTER.teams.add(opts.team);if(opts.status)FILTER.statuses.add(opts.status);if(opts.big)FILTER.big=true;if(opts.anomaly)FILTER.anomaly=true;if(opts.payee)_q=opts.payee;current=page;_sel=new Set();_filterOpen=true;render();}
 function setRole(r){ROLE=r;_sel=new Set();clearFilter();if((current==='anomaly'||current==='proof'||current==='banklink')&&!canViewAll())current='dashboard';render();}
 function render(){
   const p=PAGES[current];
@@ -980,10 +980,11 @@ function renderDashboard(){
   const P=DB.payout.filter(r=>inPeriod(r.applied)&&!EXCLUDE_TEAMS.has(normalizeTeam(r.team))&&!isInternalPay(r)),Iv=DB.invoice.filter(r=>inPeriod(r.applied)&&!EXCLUDE_TEAMS.has(normalizeTeam(r.team)));
   const krw=P.filter(r=>r.unit==='원');
   const totalAmt=krw.reduce((s,r)=>s+r.amount,0);
-  const pending=P.filter(r=>r.status==='requested');
-  const pendKRW=pending.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);
+  /* 지급대기는 '아직 안 나간 돈'이라 기간·제외팀과 무관하게 전체 기준으로 센다 (이체요청 탭의 '미지급 대기 (전체)'와 동일 계산) */
+  const pendAllP=DB.payout.filter(r=>r.status==='requested');
+  const pendAllKRW=pendAllP.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);
   const paid=P.filter(r=>r.status==='paid');
-  const bigWait=P.filter(r=>r.status==='requested'&&isBig(r));
+  const bigWait=pendAllP.filter(r=>isBig(r)); /* 지급대기와 같은 전체 기준 */
   let anomCnt=0;P.forEach(r=>{if(r.status==='requested'&&scanPayout(r).length)anomCnt++;});
   const teams={};P.forEach(r=>{if(r.unit!=='원')return;const tk=normalizeTeam(r.team)||'(미지정)';(teams[tk]=teams[tk]||{cnt:0,sum:0});teams[tk].cnt++;teams[tk].sum+=r.amount;});
   const teamArr=Object.entries(teams).sort((a,b)=>b[1].sum-a[1].sum);const tmax=Math.max(1,...teamArr.map(t=>t[1].sum));
@@ -992,9 +993,9 @@ function renderDashboard(){
   let h=todoBanner()+`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">${periodSel().replace(/ style="margin-bottom:14px"/,'')}${canApprove()?`<button class="btn btn-sm ${LOCKED.has(today().slice(0,7))?'btn-danger':'btn-secondary'}" onclick="toggleLock('${today().slice(0,7)}')">${LOCKED.has(today().slice(0,7))?'🔒 '+today().slice(0,7)+' 마감됨 — 해제':today().slice(0,7)+' 마감하기'}</button>`:''}${canManageAll()?`<button class="btn btn-sm btn-line" onclick="ownerSync()" title="엑셀에서 가져온 건들을 실제 작성자 계정과 연결해요 (작성자가 사이트에 한 번이라도 직접 등록한 적 있어야 연결 가능). 새 팀원이 사이트를 쓰기 시작하면 다시 눌러주세요.">👥 임포트 건 작성자 연결</button><button class="btn btn-sm btn-line" onclick="openReqDateFix()" title="엑셀 리스트의 요청일자와 사이트의 이체요청일을 같게 맞춰요.">📅 요청일자 보정</button>`:''}</div>`;
   h+=`<div class="kpis dash">
     <div class="kpi blue click" onclick="landing('payout',{})"><div class="lbl">이체 요청(원화 합계)</div><div class="val">${won(totalAmt)}<span style="font-size:13px">원</span></div></div>
-    <div class="kpi orange click" onclick="landing('payout',{status:'requested'})"><div class="lbl">지급 대기</div><div class="val">${pending.length}건</div></div>
-    <div class="kpi click" onclick="landing('payout',{status:'requested'})"><div class="lbl">지급대기 금액</div><div class="val">${won(pendKRW)}<span style="font-size:13px">원</span></div></div>
-    <div class="kpi red click" onclick="landing('payout',{big:true,status:'requested'})"><div class="lbl">1천만+ (고액 이체건)</div><div class="val">${bigWait.length}건</div></div>
+    <div class="kpi orange click" onclick="landing('payout',{status:'requested',all:true})" title="기간과 상관없이 아직 지급 안 된 전체 건 — 이체요청 탭의 '미지급 대기(전체)'와 같은 숫자"><div class="lbl">지급 대기 (전체)</div><div class="val">${pendAllP.length}건</div></div>
+    <div class="kpi click" onclick="landing('payout',{status:'requested',all:true})" title="기간과 상관없이 아직 지급 안 된 전체 금액(원화) — 이체요청 탭과 같은 숫자"><div class="lbl">지급대기 금액 (전체)</div><div class="val">${won(pendAllKRW)}<span style="font-size:13px">원</span></div></div>
+    <div class="kpi red click" onclick="landing('payout',{big:true,status:'requested',all:true})" title="지급 대기 중인 1천만원 이상 건 (전체 기준)"><div class="lbl">1천만+ 지급대기 (전체)</div><div class="val">${bigWait.length}건</div></div>
     <div class="kpi green click" onclick="landing('payout',{status:'paid'})"><div class="lbl">지급 완료</div><div class="val">${paid.length}건</div></div>
     <div class="kpi ${anomCnt?'red':'green'} click" onclick="landing('payout',{anomaly:true})"><div class="lbl">이상거래 감지</div><div class="val">${anomCnt}건</div></div>
   </div>`;
