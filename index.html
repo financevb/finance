@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016g'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016h'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -585,7 +585,7 @@ function renderAnomalies(){
   h+=`<div class="sumbar"><div class="sb-seg"><span>검토 대상</span> <b>${rows.length}건</b></div><div class="sb-seg"><span>⚠️ 중대</span> <b>${warnN}건</b></div><div class="sb-seg"><span>🗒 메모</span> <b>${memoN}건</b></div><button class="btn btn-sm ${_anomMemoOnly?'btn-primary':'btn-line'} sb-x" onclick="_anomMemoOnly=!_anomMemoOnly;render()">🗒 메모 있는 건만</button></div>`;
   if(!rows.length){h+=`<div class="card"><div class="empty">${I.check}<div>${_anomMemoOnly?'메모가 있는 건이 없어요.':'감지된 이상 신호가 없어요 👍 (기간을 넓혀 보세요)'}</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table style="--cw:'+colwVar('payout')+'"><thead><tr>';
-  h+=`<th class="rz">거래처 · 적요<span class="rzh" data-rz="payout" onclick="event.stopPropagation()"></span></th><th style="text-align:right">금액</th><th>요청일</th><th>상태</th><th>이상 · 메모</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="rz">거래처 · 적요${canManageAll()?'<span class="rzh" data-rz="payout" onclick="event.stopPropagation()"></span>':''}</th><th style="text-align:right">금액</th><th>요청일</th><th>상태</th><th>이상 · 메모</th><th></th></tr></thead><tbody>`;
   rows.forEach(({r,f})=>{const st=PSTATUS[r.status]||['?',''];const ms=memosFor(r.id);
     const badges=f.map(flagHtml).join('')+(ms.length?`<span class="flag caution" title="${escH(ms[ms.length-1].body)}">🗒 메모 ${ms.length}</span>`:'');
     h+=`<tr style="cursor:pointer" onclick="viewPayout('${r.id}')"><td class="rzc"><div class="t-name">${escH(r.payee)}</div><div class="t-sub">${escH(purposeText(r))}</div></td><td style="text-align:right" class="num">${won(r.amount)}${r.unit==='원'?'원':' '+r.unit}</td><td class="t-sub num" style="white-space:nowrap">${escH(fmtD(r.applied)||'-')}</td><td><span class="badge ${st[1]}">${st[0]}</span></td><td style="white-space:normal;max-width:260px">${badges}</td><td><button class="iconbtn" title="${f.length?'감지 근거':'상세'}" onclick="event.stopPropagation();${f.length?`anomalyDetail('${r.id}')`:`viewPayout('${r.id}')`}">${I.eye}</button></td></tr>`;
@@ -603,7 +603,7 @@ function renderProof(){
   h+=`<div class="t-sub" style="margin:-2px 2px 12px;line-height:1.6">세금계산서·현금영수증·계산서를 <b>받을 예정</b>으로 등록한 건이에요. 홈택스에서 확인되면 <b>수취완료</b>를 눌러주세요. (발행기한 = 작성일 기준 익월 10일)</div>`;
   if(!base.length){h+=`<div class="card"><div class="empty">${I.check}<div>미수취 증빙이 없어요 👍 모두 정상 처리됐어요.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl" style="--cw:'+colwVar('payout')+'"><thead><tr>';
-  h+=`<th class="rz">거래처 · 적요<span class="rzh" data-rz="payout" onclick="event.stopPropagation()"></span></th><th class="mhide">증빙유형</th><th class="mhide">신청인</th><th>작성일</th><th>발행기한</th><th style="text-align:right">금액</th><th>상태</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="rz">거래처 · 적요${canManageAll()?'<span class="rzh" data-rz="payout" onclick="event.stopPropagation()"></span>':''}</th><th class="mhide">증빙유형</th><th class="mhide">신청인</th><th>작성일</th><th>발행기한</th><th style="text-align:right">금액</th><th>상태</th><th></th></tr></thead><tbody>`;
   base.forEach(r=>{const st=PSTATUS[r.status]||['?',''];const ov=proofOverdue(r);const dl=proofDeadline(r.proofDate);const dls=dl?dl.getFullYear()+'-'+String(dl.getMonth()+1).padStart(2,'0')+'-'+String(dl.getDate()).padStart(2,'0'):'-';
     h+=`<tr class="rowclk" onclick="viewPayout('${r.id}')">`;
     h+=`<td class="rzc"><div class="t-name">${escH(r.payee)}</div><div class="t-sub">${escH(purposeText(r)||'-')}</div></td>`;
@@ -641,7 +641,7 @@ function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new
 let COLW=(function(){try{return JSON.parse(localStorage.getItem('fin_colw')||'{}')}catch(e){return {}}})();
 function colwVar(key){return (COLW[key]||300)+'px';}
 (function(){let d=null;
-  document.addEventListener('mousedown',function(e){var h=e.target.closest&&e.target.closest('.rzh');if(!h)return;e.preventDefault();e.stopPropagation();var tbl=h.closest('table');if(!tbl)return;var key=h.getAttribute('data-rz');d={tbl:tbl,key:key,x0:e.clientX,w0:(parseInt(tbl.style.getPropertyValue('--cw'))||COLW[key]||300)};h.classList.add('drag');document.body.style.cursor='col-resize';});
+  document.addEventListener('mousedown',function(e){var h=e.target.closest&&e.target.closest('.rzh');if(!h)return;if(!canManageAll())return;e.preventDefault();e.stopPropagation();var tbl=h.closest('table');if(!tbl)return;var key=h.getAttribute('data-rz');d={tbl:tbl,key:key,x0:e.clientX,w0:(parseInt(tbl.style.getPropertyValue('--cw'))||COLW[key]||300)};h.classList.add('drag');document.body.style.cursor='col-resize';});
   document.addEventListener('mousemove',function(e){if(!d)return;var w=Math.max(110,Math.min(680,d.w0+(e.clientX-d.x0)));d.tbl.style.setProperty('--cw',w+'px');COLW[d.key]=w;});
   document.addEventListener('mouseup',function(){if(!d)return;var el=document.querySelector('.rzh.drag');if(el)el.classList.remove('drag');document.body.style.cursor='';try{localStorage.setItem('fin_colw',JSON.stringify(COLW))}catch(e){}d=null;});
 })();
@@ -1512,7 +1512,7 @@ function renderExpense(){
   h+=expSumBar(list,false);
   if(!list.length){h+=`<div class="card"><div class="empty">${I.m_expense}<div>지출결의 내역이 없어요. 우측 상단 "지출결의 등록"으로 추가하세요.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl" style="--cw:'+colwVar('expense')+'"><thead><tr>';
-  h+=`<th class="rz sortable" onclick="setSort('expense','name')">사용처 · 목적${sortIcon('expense','name')}<span class="rzh" data-rz="expense" onclick="event.stopPropagation()"></span></th><th class="mhide">팀</th><th class="mhide">신청인</th><th class="mhide">결제수단</th><th class="mhide">분류</th><th class="sortable mhide" onclick="setSort('expense','date')">사용일${sortIcon('expense','date')}</th><th class="mhide">증빙</th><th class="sortable" style="text-align:right" onclick="setSort('expense','amount')">금액${sortIcon('expense','amount')}</th><th>상태</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="rz sortable" onclick="setSort('expense','name')">사용처 · 목적${sortIcon('expense','name')}${canManageAll()?'<span class="rzh" data-rz="expense" onclick="event.stopPropagation()"></span>':''}</th><th class="mhide">팀</th><th class="mhide">신청인</th><th class="mhide">결제수단</th><th class="mhide">분류</th><th class="sortable mhide" onclick="setSort('expense','date')">사용일${sortIcon('expense','date')}</th><th class="mhide">증빙</th><th class="sortable" style="text-align:right" onclick="setSort('expense','amount')">금액${sortIcon('expense','amount')}</th><th>상태</th><th></th></tr></thead><tbody>`;
   list.forEach(r=>{
     h+=`<tr class="rowclk" onclick="viewExpense('${r.id}')">`;
     h+=`<td class="rzc"><div class="t-name">${escH(r.merchant)}</div><div class="t-sub">${escH(r.purpose||'-')}</div></td>`;
@@ -1548,7 +1548,7 @@ function renderCardReport(){
   h+=expSumBar(list,true);
   if(!list.length){h+=`<div class="card"><div class="empty">${I.m_card}<div>신고된 기명 법카 사용 내역이 없어요. 우측 상단 "기명 법카 신고"로 등록하세요.</div></div></div>`;c.innerHTML=h;return;}
   h+='<div class="card"><div class="table-wrap"><table class="cardtbl" style="--cw:'+colwVar('cardreport')+'"><thead><tr>';
-  h+=`<th class="rz sortable" onclick="setSort('cardreport','name')">사용처 · 목적${sortIcon('cardreport','name')}<span class="rzh" data-rz="cardreport" onclick="event.stopPropagation()"></span></th><th class="sortable mhide" onclick="setSort('cardreport','holder')">명의자 · 카드${sortIcon('cardreport','holder')}</th><th class="mhide">팀</th><th class="mhide">분류</th><th class="sortable mhide" onclick="setSort('cardreport','date')">사용일${sortIcon('cardreport','date')}</th><th class="mhide">증빙</th><th class="sortable" style="text-align:right" onclick="setSort('cardreport','amount')">금액${sortIcon('cardreport','amount')}</th><th>상태</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="rz sortable" onclick="setSort('cardreport','name')">사용처 · 목적${sortIcon('cardreport','name')}${canManageAll()?'<span class="rzh" data-rz="cardreport" onclick="event.stopPropagation()"></span>':''}</th><th class="sortable mhide" onclick="setSort('cardreport','holder')">명의자 · 카드${sortIcon('cardreport','holder')}</th><th class="mhide">팀</th><th class="mhide">분류</th><th class="sortable mhide" onclick="setSort('cardreport','date')">사용일${sortIcon('cardreport','date')}</th><th class="mhide">증빙</th><th class="sortable" style="text-align:right" onclick="setSort('cardreport','amount')">금액${sortIcon('cardreport','amount')}</th><th>상태</th><th></th></tr></thead><tbody>`;
   list.forEach(r=>{
     h+=`<tr class="rowclk" onclick="viewExpense('${r.id}')">`;
     h+=`<td class="rzc"><div class="t-name">${escH(r.merchant)}</div><div class="t-sub">${escH(r.purpose||'-')}</div></td>`;
@@ -2327,7 +2327,7 @@ function renderVendors(){
   if(_pend.length){h+=`<div class="card" style="border:1px solid var(--billy-blue-200);background:var(--billy-blue-50);margin-bottom:14px;padding:14px 16px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:14px">🆕 신규 거래처 승인 대기</b><span class="tag tag-blue">${_pend.length}곳</span></div><div class="t-sub" style="margin-bottom:11px">아직 거래처로 등록되지 않은 입금처예요. 서류(통장사본·사업자등록증) 확인 후 <b>신규 거래처로 등록</b>하면 다음부터 자동 인식돼요.</div>${_pend.map((p,i)=>`<div class="acct-row"><div class="ab"><div class="abk">${escH(p.payee)} <span class="t-sub" style="font-weight:400">· ${p.cnt}건${p.sum?' · '+won(p.sum)+'원':''}</span></div><div class="anum num">${escH(p.bank||'-')} ${escH(p.account||'')} ${p.evidence?'<span class="tag tag-blue" style="margin-left:4px">📎 증빙</span>':''}</div></div><button class="btn btn-sm btn-primary" onclick="approveVendorForm(${i})">신규 거래처 등록</button></div>`).join('')}</div>`;}
   h+=`<div class="filters"><div class="search">${I.search}<input placeholder="거래처·사업자번호 검색" value="${escH(_q)}" oninput="onSearchInput(this)" oncompositionstart="onSearchCompStart()" oncompositionend="onSearchCompEnd(this)"></div></div>`;
   h+='<div class="card"><div class="table-wrap"><table style="--cw:'+colwVar('vendors')+'"><thead><tr>';
-  h+=`<th class="rz sortable" onclick="setSort('vendors','name')">거래처${sortIcon('vendors','name')}<span class="rzh" data-rz="vendors" onclick="event.stopPropagation()"></span></th><th>사업자번호</th><th>대표계좌</th><th>등록 요청</th><th class="sortable" style="text-align:right" onclick="setSort('vendors','amount')">누적 이체${sortIcon('vendors','amount')}</th><th style="text-align:right">세금계산서</th><th></th></tr></thead><tbody>`;
+  h+=`<th class="rz sortable" onclick="setSort('vendors','name')">거래처${sortIcon('vendors','name')}${canManageAll()?'<span class="rzh" data-rz="vendors" onclick="event.stopPropagation()"></span>':''}</th><th>사업자번호</th><th>대표계좌</th><th>등록 요청</th><th class="sortable" style="text-align:right" onclick="setSort('vendors','amount')">누적 이체${sortIcon('vendors','amount')}</th><th style="text-align:right">세금계산서</th><th></th></tr></thead><tbody>`;
   list.forEach(v=>{const pa=v.accounts.find(a=>a.primary)||v.accounts[0];
     h+=`<tr><td class="rzc"><div class="t-name">${escH(v.name)}</div><div class="t-sub">${v.email?escH(v.email):(v.accounts.length>1?v.accounts.length+'개 계좌':'이메일 없음')}</div></td><td class="num">${v.bizNo?escH(v.bizNo):'<span class="t-sub">없음</span>'}</td><td>${pa?escH(pa.bank)+' <span class="num">'+escH(pa.account)+'</span>':'-'}</td><td class="nmcell">${v._req?nameWrap(v._req):'<span class="t-sub">-</span>'}</td><td style="text-align:right"><span class="amt">${v._pay?won(v._pay)+(v.unit!=='원'?' '+v.unit:''):'-'}</span><div class="t-sub num">${v.cnt}건</div></td><td style="text-align:right" class="num">${v._inv?won(v._inv)+'원':'<span class="t-sub">-</span>'}</td><td><div class="rowact"><button class="iconbtn" title="상세·계좌" onclick="viewVendor('${v.id}')">${I.eye}</button></div></td></tr>`;
   });
