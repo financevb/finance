@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016k'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016l'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -636,7 +636,7 @@ let FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:fals
 let PERIOD='month',PFROM='',PTO=''; // month | ytd | all | custom (기본=이번달)
 let PYM=''; // 선택한 연-월 (YYYY-MM) — 비어있으면 이번달
 let PYR=''; // 년도 탭에서 선택한 연도 (YYYY) — 비어있으면 올해
-function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};_q='';_page=1;}
+function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false,dep:''};_q='';_page=1;}
 /* 컬럼 너비 조절(거래처/예금주 등 첫 열) — 드래그로 조절, localStorage 저장 */
 let COLW=(function(){try{return JSON.parse(localStorage.getItem('fin_colw')||'{}')}catch(e){return {}}})();
 function colwVar(key){return (COLW[key]||300)+'px';}
@@ -660,6 +660,7 @@ function visible(arr,kind){
   /* 세금계산서: 삭제·수정으로 반려 처리된 건도 기본 숨김 (반려 필터 선택 시에만 표시) */
   if(kind==='invoice'&&!FILTER.statuses.has('rejected'))list=list.filter(r=>!(r.status==='rejected'&&/^(삭제됨|수정으로 재등록)$/.test(r.rejectReason||'')));
   if(FILTER.statuses.size)list=list.filter(r=>FILTER.statuses.has(r.status));
+  if(FILTER.dep&&kind==='invoice')list=list.filter(r=>FILTER.dep==='yes'?!!depositOf(r.id):!depositOf(r.id));
   if(FILTER.big&&kind==='payout')list=list.filter(r=>isBig(r));
   if(FILTER.anomaly&&kind==='payout')list=list.filter(r=>r.status==='requested'&&scanPayout(r).length);
   if(_q){const q=_q.toLowerCase();list=list.filter(r=>JSON.stringify(r).toLowerCase().includes(q));}
@@ -669,13 +670,14 @@ function tf(dim,v){const s=FILTER[dim];s.has(v)?s.delete(v):s.add(v);render();}
 function filterBar(kind){
   const sm=kind==='payout'?PSTATUS:(kind==='invoice'?ISTATUS:ESTATUS);
   const stats=Object.keys(sm);
-  const cnt=FILTER.teams.size+FILTER.statuses.size+(FILTER.anomaly?1:0)+(FILTER.big?1:0);
+  const cnt=FILTER.teams.size+FILTER.statuses.size+(FILTER.anomaly?1:0)+(FILTER.big?1:0)+(FILTER.dep?1:0);
   let h=`<div class="period-bar">${periodSel()}</div>`;
   h+=`<div class="filters"><div class="filtwrap"><button class="btn btn-sm ${cnt?'btn-line':'btn-secondary'}" onclick="event.stopPropagation();_filterOpen=!_filterOpen;render()">${I.filter}<span>필터${cnt?' · '+cnt:''}</span></button>`;
   if(_filterOpen){
     h+='<div class="filterpop">';
     h+=`<div class="fgroup"><div class="fl">팀</div>${TEAMS_ALL.map(t=>`<button class="chip ${FILTER.teams.has(t)?'on':''}" onclick="tf('teams','${t}')">${escH(t)}</button>`).join('')}</div>`;
     h+=`<div class="fgroup"><div class="fl">상태</div>${stats.map(s=>`<button class="chip ${FILTER.statuses.has(s)?'on':''}" onclick="tf('statuses','${s}')">${sm[s][0]}${(kind==='payout'||kind==='invoice')&&s==='canceled'?' · 기본숨김':''}</button>`).join('')}</div>`;
+    if(kind==='invoice')h+=`<div class="fgroup"><div class="fl">입금확인</div><button class="chip ${FILTER.dep==='no'?'on':''}" onclick="FILTER.dep=FILTER.dep==='no'?'':'no';render()">💰 입금 안 된 건만</button><button class="chip ${FILTER.dep==='yes'?'on':''}" onclick="FILTER.dep=FILTER.dep==='yes'?'':'yes';render()">✔ 입금확인된 건만</button></div>`;
     if(kind==='payout')h+=`<div class="fgroup"><div class="fl">기타</div><button class="chip ${FILTER.anomaly?'on':''}" onclick="FILTER.anomaly=!FILTER.anomaly;render()">⚠️ 이상거래만</button><button class="chip ${FILTER.big?'on':''}" onclick="FILTER.big=!FILTER.big;render()">🔺 1천만+ (고액)</button></div>`;
     h+=`<div class="filtpop-foot">${cnt?`<button class="btn btn-sm btn-secondary" onclick="clearFilter();render()">초기화</button>`:'<span></span>'}<button class="btn btn-sm btn-primary" onclick="_filterOpen=false;render()">적용</button></div>`;
     h+='</div>';
@@ -808,6 +810,15 @@ function periodSel(){
 function fmtCur(list){const m={};list.forEach(r=>{if(r.unit&&r.unit!=='원')m[r.unit]=(m[r.unit]||0)+r.amount;});return Object.entries(m).map(([u,v])=>` · ${u} ${won(v)}`).join('');}
 /* 미지급 대기 카드 클릭 → 미지급 건만 표시 (다시 클릭하면 해제) */
 function _pendOnly(){return FILTER.statuses.size===1&&FILTER.statuses.has('requested')&&PERIOD==='all';}
+/* 입금 미확인만 보기 — 기간 전체 + 발행완료 + 입금 안 된 건 */
+function _depOnly(){return FILTER.dep==='no'&&FILTER.statuses.size===1&&FILTER.statuses.has('issued')&&PERIOD==='all';}
+function toggleDepFilter(){
+  const on=_depOnly();
+  clearFilter();
+  if(on){PERIOD=window._prevPeriod||'month';}
+  else{window._prevPeriod=PERIOD;FILTER.statuses.add('issued');FILTER.dep='no';PERIOD='all';}
+  render();
+}
 function togglePendingFilter(){
   const on=_pendOnly();
   clearFilter();
@@ -835,10 +846,14 @@ function payoutSumBar(list){
 function invoiceSumBar(list){const supply=list.reduce((s,r)=>s+r.supply,0),vat=list.reduce((s,r)=>s+r.tax,0);
   const pendAll=DB.invoice.filter(r=>r.status==='requested');
   const pendSum=pendAll.reduce((s,r)=>s+(Number(r.total)||0),0);
+  /* 발행완료인데 아직 입금확인 안 된 건 (기간 무관 전체) */
+  const noDep=DB.invoice.filter(r=>r.status==='issued'&&!depositOf(r.id));
+  const noDepSum=noDep.reduce((s,r)=>s+(Number(r.total)||0),0);
   return `<div class="statrow">
     <div class="stat"><span class="sl">공급가액</span><span class="sv">${won(supply)}원<small>세액 ${won(vat)}원</small></span></div>
     <div class="stat o" onclick="togglePendingFilter()" style="cursor:pointer" title="클릭하면 미발행 건만 표시">${_pendOnly()?'<span class="sl" style="color:var(--sys-orange);font-weight:700">미발행만 표시 중 — 클릭해서 해제</span>':'<span class="sl">미발행 금액 (전체) <span style="color:var(--billy-blue)">👆</span></span>'}<span class="sv">${won(pendSum)}원<small>${pendAll.length}건</small></span></div>
-    <div class="stat b"><span class="sl">표시 건수</span><span class="sv">${list.length}건</span></div>
+    <div class="stat b" onclick="toggleDepFilter()" style="cursor:pointer" title="클릭하면 발행완료인데 입금 안 된 건만 표시">${_depOnly()?'<span class="sl" style="color:var(--sys-orange);font-weight:700">입금 미확인만 표시 중 — 클릭해서 해제</span>':'<span class="sl">입금 미확인 (전체) <span style="color:var(--billy-blue)">👆</span></span>'}<span class="sv">${won(noDepSum)}원<small>${noDep.length}건</small></span></div>
+    <div class="stat"><span class="sl">표시 건수</span><span class="sv">${list.length}건</span></div>
     <div class="statx"><button class="btn btn-line" onclick="exportInvoiceList()">${I.download}<span>엑셀 다운로드</span></button></div>
   </div>`;}
 function todoBanner(){const pend=DB.payout.filter(r=>r.status==='requested');const pendKrw=pend.filter(r=>r.unit==='원').reduce((s,r)=>s+r.amount,0);const now=new Date(today());const due=DB.invoice.filter(r=>{if(r.status!=='requested')return false;const dl=invoiceDeadline(r.writeDate);if(!dl)return false;return Math.round((dl-now)/86400000)<=3;});const overdue=due.filter(r=>(invoiceDeadline(r.writeDate)-now)<0).length;const proofOver=DB.payout.filter(r=>r.status==='paid'&&proofOverdue(r));const expPend=canApprove()?DB.expense.filter(r=>r.status==='requested'):[];const cardPend=expPend.filter(r=>r.method==='named_card').length;const genPend=expPend.length-cardPend;if(!pend.length&&!due.length&&!proofOver.length&&!expPend.length)return `<div class="todo ok">✅ 오늘 처리할 미지급·발행 항목이 없어요.</div>`;let it=[];if(pend.length)it.push(`<button class="todo-item" onclick="current='payout';clearFilter();FILTER.statuses=new Set(['requested']);render()"><b>${pend.length}건</b> 미지급 대기 · <span>${won(pendKrw)}원</span></button>`);if(due.length)it.push(`<button class="todo-item warn" onclick="current='invoice';clearFilter();_sort.invoice={k:'writeDate',dir:1};render()"><b>${due.length}건</b> 세금계산서 발행기한 임박${overdue?' (기한 지남 '+overdue+')':''}</button>`);if(proofOver.length)it.push(`<button class="todo-item warn" onclick="go('proof')"><b>${proofOver.length}건</b> 증빙 미수취 (발행기한 경과)</button>`);if(genPend)it.push(`<button class="todo-item" onclick="go('expense')"><b>${genPend}건</b> 지출결의 대기</button>`);if(cardPend)it.push(`<button class="todo-item" onclick="go('cardreport')"><b>${cardPend}건</b> 기명 법카 확인 대기</button>`);return`<div class="todo"><span class="todo-h">📌 오늘 할 일</span>${it.join('')}</div>`;}
@@ -2332,7 +2347,34 @@ function runDepositImport(){
     toast(hit+'건 입금확인 정보를 가져왔어요.','ok');
   }).catch(e=>{out.textContent='파일을 읽지 못했어요: '+((e&&e.message)||e);});
 }
-function batchDeposit(){if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!depositOf(r.id));if(!ss.length){toast('선택한 항목이 이미 모두 입금확인 상태예요.','err');return;}const d=today();ss.forEach(r=>{const c=depData(r.id);DEPOSITS[r.id]={d,amt:c.amt||0,note:c.note||''};_pushDep(r.id,d,c.amt||0,c.note||'');});saveDeposits();_sel=new Set();render();toast(ss.length+'건 입금확인 표시. ('+d+')','ok');}
+let _BD=null;
+function batchDeposit(){
+  if(!canDeposit()){toast('입금확인은 정채영님만 기입할 수 있어요.','err');return;}
+  const ss=DB.invoice.filter(r=>_sel.has(r.id)&&!depositOf(r.id));
+  if(!ss.length){toast('선택한 항목이 이미 모두 입금확인 상태예요.','err');return;}
+  _BD=ss.map(r=>r.id);
+  const sum=ss.reduce((a,r)=>a+(Number(r.total)||0),0);
+  const skip=_sel.size-ss.length;
+  modal('💰 입금확인 일괄 표시','',
+    '<div class="policy" style="margin-bottom:12px"><b>'+ss.length+'건</b> · 세금계산서 합계 <b>'+won(sum)+'원</b>'
+    +'<div style="margin-top:6px">선택한 건 중 <b>아직 입금확인 안 된 '+ss.length+'건</b>에 입금일을 기입합니다.'
+    +(skip?' 이미 확인된 '+skip+'건은 그대로 둬요.':'')+'</div></div>'
+    +'<div class="form-row"><label>입금 날짜</label><input class="input" type="date" id="bd_date" value="'+today()+'"></div>'
+    +'<label style="display:flex;gap:7px;align-items:center;font-size:12.5px"><input type="checkbox" id="bd_fill" checked> 실제입금액을 <b>세금계산서 합계</b>와 같게 채우기</label>',
+    '<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="batchDepositRun()">'+ss.length+'건 입금확인</button>');
+}
+function batchDepositRun(){
+  const d=val('bd_date')||today();
+  const fillEl=document.getElementById('bd_fill');const fill=!fillEl||fillEl.checked;
+  let n=0;
+  (_BD||[]).forEach(id=>{
+    const r=DB.invoice.find(x=>x.id===id);if(!r)return;
+    const c=depData(id);const amt=c.amt||(fill?(Number(r.total)||0):0);
+    DEPOSITS[id]={d,amt,note:c.note||''};_pushDep(id,d,amt,c.note||'');n++;
+  });
+  _BD=null;saveDeposits();_sel=new Set();closeModal();render();
+  toast(n+'건 입금확인 표시했어요. ('+fmtD(d)+')','ok');
+}
 function batchInvoice(status){const ss=DB.invoice.filter(r=>_sel.has(r.id)&&r.status==='requested');if(!ss.length){toast('선택한 항목 중 발행대기 건이 없어요.','err');return;}if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_invoice',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리.','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='issued';});_sel=new Set();render();toast(ss.length+'건 처리.','ok');}}
 function exportInvoiceRows(ss,fname){loadXLSX().then(function(){const head=['요청일','요청자','소속팀','사업자등록번호(공급받는자)','상호','이메일(공급받는자)','계산서작성일','품목명','유형','공급가액','부가세액','세금계산서합계','실제입금액','내용','계산서발급일','상태','입금확인'];const data=ss.map(r=>{const dd=depData(r.id);return [r.applied,r.requester,normalizeTeam(r.team)||'',r.bizNo,r.company,r.email,r.writeDate,r.itemName,r.saleType,r.supply,r.tax,r.total,dd.amt||'',dd.note||'',r.issuedAt||'',(ISTATUS[r.status]||['?'])[0],dd.d||''];});const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:11},{wch:8},{wch:9},{wch:16},{wch:20},{wch:24},{wch:11},{wch:26},{wch:6},{wch:12},{wch:11},{wch:13},{wch:12},{wch:26},{wch:11},{wch:9},{wch:11}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'세금계산서');XLSX.writeFile(wb,fname);toast(ss.length+'건 엑셀 다운로드.','ok');}).catch(()=>toast('엑셀 로드 실패','err'));}
 function exportInvoice(){const ss=DB.invoice.filter(r=>_sel.has(r.id));if(!ss.length){toast('항목을 선택하세요.','err');return;}exportInvoiceRows(ss,'세금계산서_선택_'+today()+'.xlsx');}
