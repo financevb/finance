@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016j'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016k'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1299,13 +1299,25 @@ function _paidStamp(id){
   (MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body,at:fmtTs(new Date().toISOString()).slice(0,16)});
   return Promise.resolve();
 }
-function decidePayout(id,status){
+async function decidePayout(id,status){
   if(status==='rejected'&&!canReject()){toast('반려는 정채영님만 할 수 있어요.','err');return;}
   const done=()=>{closeModal();render();toast(status==='paid'?'지급완료로 표시했어요. (처리시각 기록)':'반려했어요.',status==='rejected'?'err':'ok');};
   if(!IS_SUPA){const r=DB.payout.find(x=>x.id===id);if(r){r.status=status;if(status==='paid'){r.paidAt=today();_paidStamp(id);}}done();return;}
-  sb.rpc('fin_decide_payout',{p_id:id,p_status:status,p_reason:''})
-    .then(({error})=>{if(error){toast(error.message||'오류가 났어요','err');throw error;}return status==='paid'?_paidStamp(id):null;})
-    .then(()=>loadData()).then(done).catch(()=>{});
+  const r1=await sb.rpc('fin_decide_payout',{p_id:id,p_status:status,p_reason:''});
+  let cur=await _payStat(id),r2=null;
+  if(!cur||cur.status!==status){
+    const upd={status:status};
+    if(status==='paid')upd.paid_date=(cur&&cur.paid_date)||today();
+    r2=await sb.from('fin_payouts').update(upd).eq('id',id).select('id');
+    cur=await _payStat(id);
+  }
+  if(!cur||cur.status!==status){
+    toast('처리 실패 — '+_whyFail(r1,r2,cur),'err');
+    console.error('[decidePayout]',id,status,r1&&r1.error,r2&&r2.error,cur);
+    return;
+  }
+  if(status==='paid')await _paidStamp(id);
+  await loadData();done();
 }
 /* 상태 인라인 변경 — 상태 배지 클릭 → 옵션 선택(재무만, 자유 전환) */
 function closeStatusMenu(){['statusMenu','statusBackdrop'].forEach(i=>{const e=document.getElementById(i);if(e)e.remove();});}
@@ -1321,15 +1333,27 @@ function openStatusMenu(id,ev){
   m.style.left=Math.max(8,x)+'px';m.style.top=Math.max(8,y)+'px';
   const bd=document.createElement('div');bd.className='statusbackdrop';bd.id='statusBackdrop';bd.onclick=closeStatusMenu;document.body.appendChild(bd);
 }
-function setPayoutStatus(id,status){
+async function setPayoutStatus(id,status){
   closeStatusMenu();
   if(status==='rejected'&&!canReject()){toast('반려는 정채영님만 할 수 있어요.','err');return;}
   const r=DB.payout.find(x=>x.id===id);if(!r||r.status===status)return;
   const done=()=>{render();toast('상태를 '+PSTATUS[status][0]+'(으)로 바꿨어요.','ok');};
   if(!IS_SUPA){r.status=status;r.paidAt=status==='paid'?(r.paidAt||today()):'';if(status==='paid')_paidStamp(id);done();return;}
-  sb.rpc('fin_set_payout_status',{p_id:id,p_status:status})
-    .then(({error})=>{if(error){toast(error.message||'오류가 났어요','err');throw error;}return status==='paid'?_paidStamp(id):null;})
-    .then(()=>loadData()).then(done).catch(()=>{});
+  const r1=await sb.rpc('fin_set_payout_status',{p_id:id,p_status:status});
+  let cur=await _payStat(id),r2=null;
+  if(!cur||cur.status!==status){
+    const upd={status:status};
+    upd.paid_date=status==='paid'?((cur&&cur.paid_date)||today()):null;
+    r2=await sb.from('fin_payouts').update(upd).eq('id',id).select('id');
+    cur=await _payStat(id);
+  }
+  if(!cur||cur.status!==status){
+    toast('상태 변경 실패 — '+_whyFail(r1,r2,cur),'err');
+    console.error('[setPayoutStatus]',id,status,r1&&r1.error,r2&&r2.error,cur);
+    return;
+  }
+  if(status==='paid')await _paidStamp(id);
+  await loadData();done();
 }
 function batchPayout(status){const ss=DB.payout.filter(r=>_sel.has(r.id)&&r.status==='requested');if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_payout',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>status==='paid'?Promise.all(ss.map(r=>_paidStamp(r.id))):null).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리. (처리시각 기록)','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='paid';r.paidAt=today();_paidStamp(r.id);});_sel=new Set();render();toast(ss.length+'건 지급완료 표시.','ok');}}
 /* ---------- 기업은행 대량이체 업로드 파일 만들기 (재무 승인자 전용) ---------- */
@@ -1992,13 +2016,38 @@ function viewInvoice(id){const r=DB.invoice.find(x=>x.id===id);if(!r)return;cons
   if(canApprove()&&r.status==='rejected')foot=`${invEditBtn}<button class="btn btn-primary" onclick="revertInvoice('${id}')">발행대기로 되돌리기</button><button class="btn btn-line btn-sm" onclick="closeModal();cloneInvoice('${id}')"><span>복제</span></button><button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
   modal('세금계산서 발행 요청 상세','',`<div style="margin-bottom:10px">${deadlineBadge(r.writeDate)}</div><div class="dl"><dt>상태</dt><dd><span class="badge ${st[1]}">${st[0]}</span></dd><dt>요청일</dt><dd class="num">${escH(fmtD(r.appliedTs||r.applied)||'-')}</dd><dt>구분</dt><dd>${escH(r.saleType||'매출')}</dd><dt>상호</dt><dd>${escH(r.company)}${cp(r.company)}</dd><dt>대표자</dt><dd>${escH(r.ceo)}${cp(r.ceo)}</dd><dt>사업자번호</dt><dd class="num">${escH(r.bizNo)}${cp(r.bizNo)}</dd>${r.addr?`<dt>사업장</dt><dd>${escH(r.addr)}${cp(r.addr)}</dd>`:''}${(r.bizType||r.bizItem)?`<dt>업태 · 종목</dt><dd>${escH(r.bizType||'-')}${cp(r.bizType)} · ${escH(r.bizItem||'-')}${cp(r.bizItem)}</dd>`:''}<dt>이메일</dt><dd>${escH(r.email)}${cp(r.email)}</dd><dt>품목</dt><dd>${escH(r.itemName)}${cp(r.itemName)}</dd><dt>작성일자</dt><dd>${escH(fmtD(r.writeDate))}</dd><dt>공급가액</dt><dd>${won(r.supply)}원</dd><dt>세액</dt><dd>${won(r.tax)}원</dd><dt>합계</dt><dd><b>${won(r.total)}원</b></dd><dt>신청인</dt><dd>${escH(r.requester||'-')}</dd><dt>팀</dt><dd>${escH(normalizeTeam(r.team)||'-')}</dd>${r.evidence?`<dt>증빙</dt><dd><a href="${escH(r.evidence)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">Dropbox 링크 ↗</a></dd>`:''}</div>`,foot);
 }
-function decideInvoice(id,status){sv('fin_decide_invoice',{p_id:id,p_status:status,p_reason:''},()=>{const r=DB.invoice.find(x=>x.id===id);if(r){r.status=status;if(status==='issued')r.issuedAt=today();}}).then(()=>{closeModal();render();toast(status==='issued'?'발행완료로 표시했어요.':'반려했어요.',status==='rejected'?'err':'ok');});}
+/* 서버가 오류 없이 "성공"만 답하고 실제로는 안 바뀌는 경우가 있어, 쓰고 나서 다시 읽어 확인한다 */
+async function _invStat(id){const q=await sb.from('fin_invoices').select('status,reject_reason,issued_date').eq('id',id).maybeSingle();return q.data||null;}
+async function _payStat(id){const q=await sb.from('fin_payouts').select('status,paid_date').eq('id',id).maybeSingle();return q.data||null;}
+function _whyFail(r1,r2,cur){return [r1&&r1.error&&('승인처리: '+(r1.error.message||r1.error.code||'오류')),
+  r2&&(r2.error?('직접수정: '+(r2.error.message||r2.error.code||'오류')):((!r2.data||!r2.data.length)?'직접수정: 권한이 없어 0건 변경됨':'')),
+  cur?('서버 상태: '+cur.status):'서버에서 건을 찾을 수 없음'].filter(Boolean).join(' / ');}
+async function decideInvoice(id,status){
+  const fin=()=>{closeModal();render();toast(status==='issued'?'발행완료로 표시했어요.':'반려했어요.',status==='rejected'?'err':'ok');};
+  if(!IS_SUPA){const r=DB.invoice.find(x=>x.id===id);if(r){r.status=status;if(status==='issued')r.issuedAt=today();}fin();return;}
+  const r1=await sb.rpc('fin_decide_invoice',{p_id:id,p_status:status,p_reason:''});
+  let cur=await _invStat(id),r2=null;
+  if(!cur||cur.status!==status){
+    const upd={status:status};
+    if(status==='issued')upd.issued_date=(cur&&cur.issued_date)||today();
+    r2=await sb.from('fin_invoices').update(upd).eq('id',id).select('id');
+    cur=await _invStat(id);
+  }
+  if(!cur||cur.status!==status){
+    toast('처리 실패 — '+_whyFail(r1,r2,cur),'err');
+    console.error('[decideInvoice]',id,status,r1&&r1.error,r2&&r2.error,cur);
+    return;
+  }
+  await loadData();fin();
+}
 /* 반려·발행완료 → 발행대기 되돌리기 (서버 RPC가 없어 직접 수정, 실패 시 안내) */
+/* 반려·발행완료 → 발행대기 되돌리기 (서버 RPC가 없어 직접 수정, 반영 여부 확인) */
 async function revertInvoice(id){
   if(!canApprove())return;
   if(IS_SUPA){
-    const {error}=await sb.from('fin_invoices').update({status:'requested',reject_reason:null,issued_date:null}).eq('id',id);
-    if(error){toast('되돌리기 실패: '+error.message,'err');return;}
+    const r2=await sb.from('fin_invoices').update({status:'requested',reject_reason:null,issued_date:null}).eq('id',id).select('id');
+    const cur=await _invStat(id);
+    if(!cur||cur.status!=='requested'){toast('되돌리기 실패 — '+_whyFail(null,r2,cur),'err');return;}
     await loadData();
   }else{const r=DB.invoice.find(x=>x.id===id);if(r){r.status='requested';r.rejectReason='';r.issuedAt='';}}
   closeModal();render();toast('발행대기로 되돌렸어요.','ok');
