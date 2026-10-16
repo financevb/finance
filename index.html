@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016c'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016d'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1145,6 +1145,7 @@ function editPayout(id){const r=DB.payout.find(x=>x.id===id);if(!canEditPayout(r
 function cancelPayout(id){confirmModal('이체 요청 철회','이 요청을 철회할까요?',()=>{sv('fin_cancel_payout',{p_id:id},()=>{const r=DB.payout.find(x=>x.id===id);if(r)r.status='canceled';}).then(()=>{render();toast('철회했어요.');});});}
 function viewPayout(id){
   const r=DB.payout.find(x=>x.id===id);if(!r)return;const st=PSTATUS[r.status];const flags=r.status==='requested'?scanPayout(r):[];
+  const cp=v=>v?`<button class="iconbtn" title="복사" data-v="${escH(String(v))}" onclick="_cp(this)" style="margin-left:4px;vertical-align:-2px">📋</button>`:'';
   const editBtn=(canEditPayout(r)?`<button class="btn btn-line btn-sm" onclick="closeModal();editPayout('${id}')"><span>수정</span></button>`:'')+(canDeletePayout(r)?`<button class="btn btn-danger btn-sm" onclick="closeModal();deletePayout('${id}')"><span>삭제</span></button>`:'');
   let foot=`${editBtn}<button class="btn btn-line btn-sm" onclick="closeModal();clonePayout('${id}')">${I.copy}<span>복제</span></button><button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
   if(canApprove()&&r.status==='requested')foot=`${editBtn}${canReject()?`<button class="btn btn-danger" onclick="decidePayout('${id}','rejected')">반려</button>`:''}<button class="btn btn-primary" onclick="decidePayout('${id}','paid')">지급완료</button>`;
@@ -1153,11 +1154,11 @@ function viewPayout(id){
   const proof=proofDetailHtml(r);
   modal('이체 요청 상세','',(flags.length?'<div style="margin-bottom:12px">'+flags.map(flagHtml).join('')+'</div>':'')+`<div class="dl">
     <dt>상태</dt><dd><span class="badge ${st[1]}">${st[0]}</span></dd>
-    <dt>거래처/예금주</dt><dd>${escH(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</dd>
-    <dt>은행·계좌</dt><dd>${escH(r.bank)} ${escH(r.account)}</dd>
-    <dt>금액</dt><dd><b>${won(r.amount)} ${escH(r.unit)}</b></dd>
+    <dt>거래처/예금주</dt><dd>${escH(r.payee)}${cp(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</dd>
+    <dt>은행·계좌</dt><dd>${escH(r.bank)} ${escH(r.account)}${cp(r.account)}</dd>
+    <dt>금액</dt><dd><b>${won(r.amount)} ${escH(r.unit)}</b>${cp(r.amount)}</dd>
     <dt>분류</dt><dd>${escH(r.category||'-')}</dd>
-    <dt>적요</dt><dd>${escH(purposeText(r)||'-')}</dd>
+    <dt>적요</dt><dd>${escH(purposeText(r)||'-')}${cp(purposeText(r))}</dd>
     <dt>신청인</dt><dd>${escH(r.requester||'-')}</dd>
     <dt>팀</dt><dd>${escH(normalizeTeam(r.team)||'-')}</dd>
     <dt>이체요청일</dt><dd class="num">${escH(fmtD(r.appliedTs||r.applied)||'-')}</dd>
