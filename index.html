@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016i'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016j'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1952,13 +1952,19 @@ function batchDeleteInvoice(){
 /* 발행 요청을 반려(사유 지정)로 돌려 목록에서 숨김 — 승인자 RPC → 안 되면 본인 행 직접 수정 순으로 시도 */
 async function _retireInvoice(id,reason){
   if(!IS_SUPA){const x=DB.invoice.find(y=>y.id===id);if(x){x.status='rejected';x.rejectReason=reason;}return;}
+  const look=async()=>{const q=await sb.from('fin_invoices').select('status,reject_reason').eq('id',id).maybeSingle();return q.data||null;};
+  const done=d=>!!d&&d.status==='rejected'&&(d.reject_reason||'')===reason;
   const r1=await sb.rpc('fin_decide_invoice',{p_id:id,p_status:'rejected',p_reason:reason});
-  if(!r1.error)return;
+  let cur=await look();
+  if(done(cur))return;
+  /* RPC가 "성공"만 하고 실제로 안 바뀌거나 사유가 안 들어간 경우 → 직접 수정으로 마무리 */
   const r2=await sb.from('fin_invoices').update({status:'rejected',reject_reason:reason}).eq('id',id).select('id');
-  if(!r2.error&&r2.data&&r2.data.length)return;
+  cur=await look();
+  if(done(cur))return;
   /* 실패 원인을 그대로 보여줌 (원인 파악용) */
   const why=[r1.error&&('승인처리: '+(r1.error.message||r1.error.code||'오류')),
-             r2.error?('직접수정: '+(r2.error.message||r2.error.code||'오류')):(!r2.data||!r2.data.length?'직접수정: 권한이 없어 0건 변경됨':'')]
+             r2.error?('직접수정: '+(r2.error.message||r2.error.code||'오류')):(!r2.data||!r2.data.length?'직접수정: 권한이 없어 0건 변경됨':''),
+             cur?('서버 상태: '+cur.status+'/'+(cur.reject_reason||'사유없음')):'서버에서 건을 찾을 수 없음']
             .filter(Boolean).join(' / ');
   toast('삭제 실패 — '+why,'err');
   console.error('[retireInvoice]',id,r1.error,r2.error,r2.data);
