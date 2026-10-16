@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016m'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016n'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -774,7 +774,7 @@ function render(){
   if(current==='fuel')act=`<button class="btn btn-primary" onclick="openFuelForm()">${I.car}<span>유류비 신청</span></button>`;
   if(current==='expense')act=`<button class="btn btn-primary" onclick="openExpenseForm()">${I.plus}<span>지출결의 등록</span></button>`;
   if(current==='cardreport')act=`<button class="btn btn-line btn-sm" onclick="openCardBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openCardForm()">${I.plus}<span>기명 법카 신고</span></button>`;
-  if(current==='invoice')act=`${canDeposit()?`<button class="btn btn-line" onclick="openDepositImport()">📥<span>입금확인 가져오기</span></button>`:''}<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
+  if(current==='invoice')act=`${canManageAll()?'<button class="btn btn-line" onclick="openInvFix()" title="발급일은 있는데 상태가 발행대기로 남은 건을 찾아 발행완료로 맞춰요.">🧹 상태 복구</button>':''}`+`${canDeposit()?`<button class="btn btn-line" onclick="openDepositImport()">📥<span>입금확인 가져오기</span></button>`:''}<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
   if(current==='proof'&&canManageAll())act=`<button class="btn btn-primary" onclick="openLedgerCompare()">📒<span>매입 계산서 대조 (원장)</span></button>`;
   if(current==='vendors')act=`<button class="btn btn-line" onclick="exportVendors()">${I.download}<span>거래처 엑셀</span></button>`;
   if(current==='coupon')act=`${canApprove()?`<button class="btn btn-line btn-sm" onclick="openCouponCodeForm()">${I.plus}<span>코드 추가</span></button>`:''}<button class="btn btn-primary" onclick="openCouponForm()">${I.plus}<span>새 쿠폰 발급</span></button>`;
@@ -972,6 +972,43 @@ async function rdApply(onlyOne){
   await loadData();render();
   if(pg)pg.innerHTML='<b>완료 — 성공 '+ok+'건 · 실패 '+fail+'건</b>'+(errMsg?'<br>실패 이유: '+escH(errMsg):'');
   toast(onlyOne?'시험 1건 적용 — 성공 '+ok+' · 실패 '+fail:'요청일자 보정 완료 — 성공 '+ok+'건 · 실패 '+fail+'건',fail?'err':'ok');
+}
+/* ---------- 상태 어긋난 세금계산서 복구 (정채영 전용) ---------- */
+/* 발급일은 들어갔는데 상태가 '발행대기'로 남아 미발행 금액에 계속 잡히는 건을 찾아 발행완료로 맞춤 */
+let _FI=null;
+function openInvFix(){
+  if(!canManageAll())return;
+  const bad=DB.invoice.filter(r=>r.status==='requested'&&r.issuedAt);
+  _FI=bad.map(r=>r.id);
+  const rows=bad.slice(0,20).map(r=>'<tr><td>'+escH(r.company)+'</td><td>'+escH(r.requester||'-')+'</td><td class="num">'+won(r.total)+'</td><td class="num">'+escH(fmtD(r.writeDate)||'-')+'</td><td class="num">'+escH(fmtD(r.issuedAt))+'</td></tr>').join('');
+  modal('🧹 상태 어긋난 세금계산서 복구','wide',
+    '<div class="policy" style="margin-bottom:12px"><b>무엇을 고치나요?</b><div style="margin-top:6px"><b>발급일은 적혀 있는데 상태가 "발행대기"</b>로 남은 건을 찾아 <b>발행완료</b>로 맞춥니다. 이런 건이 미발행 금액에 계속 잡혀요.</div></div>'
+    +(bad.length
+      ? '<div class="dl" style="margin-bottom:10px"><dt>찾은 건</dt><dd class="num"><b>'+bad.length+'건</b> · 합계 '+won(bad.reduce((a,r)=>a+(Number(r.total)||0),0))+'원</dd></div>'
+        +'<div class="tbl-wrap" style="max-height:260px;overflow:auto"><table class="tbl"><thead><tr><th>상호</th><th>요청자</th><th>합계</th><th>작성일</th><th>발급일</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+        +(bad.length>20?'<div class="t-sub" style="margin-top:7px">앞 20건만 미리보기입니다.</div>':'')
+        +'<div id="fi_prog" class="t-sub" style="margin-top:10px"></div>'
+      : '<div class="t-sub" style="line-height:1.8">이런 건은 <b>없습니다</b>. 그렇다면 미발행 금액에 남은 건은 서버에 정말 <b>발행대기</b>로 저장된 건이에요.<br>해당 건을 클릭해 <b>[발행완료]</b>를 누르면 정리됩니다. 같은 건이 두 번 등록돼 있는 경우(발행완료 1건 + 발행대기 1건)라면 발행대기 쪽을 <b>삭제</b>하세요.</div>'),
+    (bad.length?'<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="runInvFix()">'+bad.length+'건 발행완료로 고치기</button>':'<button class="btn btn-secondary" onclick="closeModal()">닫기</button>'));
+}
+async function runInvFix(){
+  const ids=_FI||[];if(!ids.length)return;
+  const pg=document.getElementById('fi_prog');
+  let ok=0,fail=0,why='';
+  for(let i=0;i<ids.length;i++){
+    const id=ids[i];
+    const r1=await sb.rpc('fin_decide_invoice',{p_id:id,p_status:'issued',p_reason:''});
+    let cur=await _invStat(id),r2=null;
+    if(!cur||cur.status!=='issued'){
+      r2=await sb.from('fin_invoices').update({status:'issued'}).eq('id',id).select('id');
+      cur=await _invStat(id);
+    }
+    if(cur&&cur.status==='issued')ok++;else{fail++;if(!why)why=_whyFail(r1,r2,cur);}
+    if(pg)pg.innerHTML='진행 '+(i+1)+'/'+ids.length+' · 성공 '+ok+' · 실패 '+fail;
+  }
+  _FI=null;await loadData();render();
+  if(pg)pg.innerHTML='<b>완료 — 성공 '+ok+'건 · 실패 '+fail+'건</b>'+(why?'<br>실패 이유: '+escH(why):'');
+  toast('복구 완료 — 성공 '+ok+'건 · 실패 '+fail+'건',fail?'err':'ok');
 }
 function renderDashboard(){
   const c=document.getElementById('content');
