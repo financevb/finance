@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016h'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016i'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1956,7 +1956,12 @@ async function _retireInvoice(id,reason){
   if(!r1.error)return;
   const r2=await sb.from('fin_invoices').update({status:'rejected',reject_reason:reason}).eq('id',id).select('id');
   if(!r2.error&&r2.data&&r2.data.length)return;
-  toast('서버 권한 때문에 본인 계정으로는 처리할 수 없어요. 재무팀(정채영)에게 요청해주세요.','err');
+  /* 실패 원인을 그대로 보여줌 (원인 파악용) */
+  const why=[r1.error&&('승인처리: '+(r1.error.message||r1.error.code||'오류')),
+             r2.error?('직접수정: '+(r2.error.message||r2.error.code||'오류')):(!r2.data||!r2.data.length?'직접수정: 권한이 없어 0건 변경됨':'')]
+            .filter(Boolean).join(' / ');
+  toast('삭제 실패 — '+why,'err');
+  console.error('[retireInvoice]',id,r1.error,r2.error,r2.data);
   throw new Error('retire-failed');
 }
 function deleteInvoice(id){
