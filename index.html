@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016f'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261016g'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -830,7 +830,7 @@ function payoutSumBar(list){
     <div class="stat"><span class="sl">${sumLbl}</span><span class="sv">${won(monthSum)}원<small>${monthRows.length}건</small></span></div>
     <div class="stat o" onclick="togglePendingFilter()" style="cursor:pointer" title="클릭하면 미지급 건만 표시">${_pendOnly()?'<span class="sl" style="color:var(--sys-orange);font-weight:700">미지급 대기만 표시 중 — 클릭해서 해제</span>':'<span class="sl">미지급 대기 (전체) <span style="color:var(--billy-blue)">👆</span></span>'}<span class="sv">${won(pendKrw)}원<small>${pendAll.length}건</small></span></div>
     <div class="stat b"><span class="sl">표시 건수</span><span class="sv">${list.length}건</span></div>
-    <div class="statx">${canApprove()?`<button class="btn btn-line" onclick="exportIbkBulk()" title="지급대기 건을 기업은행 대량이체 업로드 양식으로 내려받아요.">🏦<span>대량이체 파일</span></button>`:''}<button class="btn btn-line" onclick="exportPayoutList()">${I.download}<span>엑셀 다운로드</span></button></div>
+    <div class="statx">${canApprove()?`<button class="btn btn-line" onclick="exportIbkBulk()" title="이체희망일이 오늘인 지급대기 건을 기업은행 대량이체 양식으로 내려받아요 (범위는 팝업에서 바꿀 수 있어요).">🏦<span>대량이체 파일</span></button>`:''}<button class="btn btn-line" onclick="exportPayoutList()">${I.download}<span>엑셀 다운로드</span></button></div>
   </div>`;}
 function invoiceSumBar(list){const supply=list.reduce((s,r)=>s+r.supply,0),vat=list.reduce((s,r)=>s+r.tax,0);
   const pendAll=DB.invoice.filter(r=>r.status==='requested');
@@ -1336,21 +1336,38 @@ function batchPayout(status){const ss=DB.payout.filter(r=>_sel.has(r.id)&&r.stat
 /* 양식: 입금은행 | 입금계좌번호 | 이체금액 | 내통장인쇄내용 | 받는분통장인쇄내용 | CMS코드 */
 const IBK_MYPRINT='빌리지베이비'; /* 받는분 통장에 찍히는 우리 회사 이름 */
 let _IBK=null;
-function exportIbkBulk(){
+function exportIbkBulk(mode){
   if(!canApprove())return;
+  mode=mode||'today';
   let ss=DB.payout.filter(r=>_sel.has(r.id));
   const bySel=ss.length>0;
-  if(!bySel)ss=applySort(visible(DB.payout,'payout'),'payout').filter(r=>r.status==='requested');
+  const pend=DB.payout.filter(r=>r.status==='requested');
+  const cntToday=pend.filter(r=>dueOf(r)===today()).length;
+  const cntUpto=pend.filter(r=>(dueOf(r)||'')<=today()).length;
+  if(!bySel){
+    ss=applySort(pend,'payout');
+    if(mode==='today')ss=ss.filter(r=>dueOf(r)===today());
+    else if(mode==='upto')ss=ss.filter(r=>(dueOf(r)||'')<=today());
+  }
   const skipCur=ss.filter(r=>r.unit!=='원').length;
   const skipAcct=ss.filter(r=>r.unit==='원'&&!(r.account&&r.bank)).length;
   const list=ss.filter(r=>r.unit==='원'&&r.account&&r.bank);
-  if(!list.length){toast(bySel?'선택한 건 중 원화 이체 건이 없어요.':'지급대기 상태인 원화 이체 건이 없어요.','err');return;}
+  if(!list.length){
+    if(bySel){toast('선택한 건 중 원화 이체 건이 없어요.','err');return;}
+    toast(mode==='today'?'이체희망일이 오늘인 지급대기 건이 없어요.':'보낼 지급대기 건이 없어요.','err');
+    if(mode==='today'&&cntUpto)toast('오늘까지(지난 희망일 포함)는 '+cntUpto+'건 있어요. 버튼을 다시 눌러 범위를 바꿔보세요.','ok');
+    return;
+  }
   _IBK=list;
   const sum=list.reduce((s,r)=>s+r.amount,0);
   const longName=list.filter(r=>String(r.payee||'').length>10).length;
+  const scope=bySel?'선택한 건':(mode==='today'?'이체희망일이 <b>오늘('+fmtD(today())+')</b>인 건':mode==='upto'?'이체희망일이 <b>오늘까지</b>인 건 (지난 희망일 포함)':'<b>지급대기 전체</b>');
+  const switcher=bySel?'':'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px">'
+    +['today|오늘 희망일만 '+cntToday+'건','upto|오늘까지(지난 건 포함) '+cntUpto+'건','all|지급대기 전체 '+pend.length+'건']
+      .map(x=>{const k=x.split('|')[0],t=x.split('|')[1];return '<button class="btn btn-sm '+(mode===k?'btn-primary':'btn-line')+'" onclick="exportIbkBulk(\''+k+'\')">'+t+'</button>';}).join('')+'</div>';
   const prev=list.slice(0,10).map(r=>'<tr><td>'+escH(normBank(r.bank))+'</td><td class="num">'+escH(r.account)+'</td><td class="num">'+won(r.amount)+'</td><td>'+escH(String(r.payee||'').slice(0,10))+'</td><td class="t-sub">'+escH(purposeText(r).slice(0,14))+'</td></tr>').join('');
   modal('🏦 기업은행 대량이체 파일 만들기','wide',
-    '<div class="policy" style="margin-bottom:12px"><b>'+(bySel?'선택한':'지금 화면의 지급대기')+' '+list.length+'건</b> · 합계 <b>'+won(sum)+'원</b>'
+    switcher+'<div class="policy" style="margin-bottom:12px"><b>'+scope+' '+list.length+'건</b> · 합계 <b>'+won(sum)+'원</b>'
     +'<div style="margin-top:6px">기업은행 <b>대량이체 업로드 양식</b>에 맞춰 파일을 만듭니다. 받는분 통장에는 <b>'+IBK_MYPRINT+'</b>, 내 통장에는 <b>예금주 이름</b>이 찍혀요.</div></div>'
     +'<div class="tbl-wrap" style="max-height:260px;overflow:auto"><table class="tbl"><thead><tr><th>입금은행</th><th>입금계좌번호</th><th>이체금액</th><th>내통장인쇄내용</th><th>적요(참고)</th></tr></thead><tbody>'+prev+'</tbody></table></div>'
     +'<div class="t-sub" style="margin-top:9px;line-height:1.75">'+(list.length>10?'· 위는 앞 10건 미리보기예요 (파일에는 '+list.length+'건 전부 들어갑니다).<br>':'')
