@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261016n'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261019a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -387,7 +387,20 @@ const ISTATUS={requested:['발행대기','badge-pending'],issued:['발행완료'
 let DEPOSITS={};try{DEPOSITS=JSON.parse(localStorage.getItem('fin_deposit_marks')||'{}')||{};}catch(e){DEPOSITS={};}
 function saveDeposits(){try{localStorage.setItem('fin_deposit_marks',JSON.stringify(DEPOSITS));}catch(e){}}
 /* 입금액·내용은 evidence_url 칸에 '#D{json}#D원래링크' 형태로 함께 저장 (서버 전용 칸이 없어서) */
-function _depExtra(ev){const m=String(ev||'').match(/^#D(\{[\s\S]*?\})#D([\s\S]*)$/);if(!m)return {url:ev||''};try{const j=JSON.parse(m[1]);return {a:Number(j.a)||0,n:j.n||'',ad:j.ad||'',bt:j.bt||'',bi:j.bi||'',url:m[2]||''};}catch(e){return {url:ev||''};}}
+function _depExtra(ev){const m=String(ev||'').match(/^#D(\{[\s\S]*?\})#D([\s\S]*)$/);if(!m)return {url:ev||''};try{const j=JSON.parse(m[1]);return {a:Number(j.a)||0,n:j.n||'',ad:j.ad||'',bt:j.bt||'',bi:j.bi||'',m:Array.isArray(j.m)?j.m:[],j,url:m[2]||''};}catch(e){return {url:ev||''};}}
+/* 이체 관리자 메모도 서버 전용 칸이 없어 evidence_url의 #D{json} 안 m:[{i,a,b,t}]로 저장 — 서버의 최신 값을 읽어 합친 뒤 저장(다른 값 보존) */
+async function _payExWrite(id,fn){
+  const {data,error}=await sb.from('fin_payouts').select('evidence_url').eq('id',id).single();
+  if(error)throw error;
+  const dx=_depExtra(data&&data.evidence_url);const j=Object.assign({},dx.j||{});fn(j);
+  Object.keys(j).forEach(k=>{if(j[k]==null||(Array.isArray(j[k])&&!j[k].length))delete j[k];});
+  const ev=(Object.keys(j).length?('#D'+JSON.stringify(j)+'#D'):'')+(dx.url||'');
+  const {data:d2,error:e2}=await sb.from('fin_payouts').update({evidence_url:ev}).eq('id',id).select('evidence_url');
+  if(e2)throw e2;if(!d2||!d2.length||d2[0].evidence_url!==ev)throw new Error('서버에 저장되지 않았어요 (권한 확인 필요)');
+  const r=DB.payout.find(x=>x.id===id);if(r){r._ex=j;r.payConfirmAmt=Number(j.a)||0;}
+  MEMOS[id]=_memosOf(j.m);
+}
+function _memosOf(m){return (m||[]).map(x=>({id:x.i,author:x.a||'',body:x.b||'',at:x.t||''}));}
 /* 발행용 추가정보(사업장 주소 ad / 업태 bt / 종목 bi)를 증빙 URL 앞 #D{json}#D에 함께 저장 */
 function _invEv(url,ad,bt,bi,a,n){const x={};if(a)x.a=a;if(n)x.n=n;if(ad)x.ad=ad;if(bt)x.bt=bt;if(bi)x.bi=bi;return (Object.keys(x).length?('#D'+JSON.stringify(x)+'#D'):'')+(url||'');}
 function depData(id){const v=DEPOSITS[id];const o=(!v)?{}:(typeof v==='string'?{d:v}:Object.assign({},v)); /* 구버전(날짜 문자열) 호환 */
@@ -1328,8 +1341,13 @@ function memoHtml(r){
   return `<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🗒 관리자 메모 <span class="t-sub" style="font-weight:400">· 관리자에게만 보여요</span></div>${list}${canApprove()?`<div style="display:flex;gap:6px;margin-top:9px"><input class="input" id="memo_in_${r.id}" placeholder="메모 추가 (예: 세금계산서 재요청함)" style="flex:1" onkeydown="if(event.key==='Enter')addMemo('${r.id}')"><button class="btn btn-sm btn-primary" onclick="addMemo('${r.id}')">추가</button></div>`:''}`;
 }
 function addMemo(id){const el=document.getElementById('memo_in_'+id);const body=el?el.value.trim():'';if(!body){toast('메모 내용을 입력해 주세요.','err');return;}
-  sv('fin_add_memo',{p_payout_id:id,p_body:body},()=>{(MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body:body,at:today()+' '+new Date().toTimeString().slice(0,5)});}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(id);toast('메모를 추가했어요.','ok');});}
-function delMemo(mid,pid){sv('fin_del_memo',{p_id:mid},()=>{MEMOS[pid]=(MEMOS[pid]||[]).filter(m=>m.id!==mid);}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(pid);toast('메모를 삭제했어요.');});}
+  const at=today()+' '+new Date().toTimeString().slice(0,5);
+  const pr=IS_SUPA?_payExWrite(id,j=>{j.m=(j.m||[]).concat([{i:uid('mm'),a:ME().name,b:body,t:at}]);}).catch(e=>{toast('메모 저장 실패 — '+(e.message||e),'err');throw e;})
+    :Promise.resolve((MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body:body,at}));
+  pr.then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(id);toast('메모를 추가했어요.','ok');});}
+function delMemo(mid,pid){const pr=IS_SUPA?_payExWrite(pid,j=>{j.m=(j.m||[]).filter(m=>m.i!==mid);}).catch(e=>{toast('메모 삭제 실패 — '+(e.message||e),'err');throw e;})
+    :Promise.resolve(MEMOS[pid]=(MEMOS[pid]||[]).filter(m=>m.id!==mid));
+  pr.then(()=>{const o=document.getElementById('ov');if(o)o.remove();viewPayout(pid);toast('메모를 삭제했어요.');});}
 /* 지급완료 처리 시각·처리자 자동 기록 (관리자 메모로 서버 저장) */
 /* 지급완료 메일 알림 — 구글 앱스 스크립트 웹훅 (비어 있으면 발송 안 함) */
 const NOTIFY_URL='https://script.google.com/macros/s/AKfycbxfbRMXRqi3NEU4xqUhH25tPYzsBNAoxVyAG7Vr6lDUTdCiWP4flt4lrL-DTc7H39VK/exec';
@@ -1348,7 +1366,7 @@ function notifyPaid(id){
 function _paidStamp(id){
   notifyPaid(id);
   const body='🕒 지급완료 처리 · '+fmtTs(new Date().toISOString())+' · '+ME().name;
-  if(IS_SUPA)return sb.rpc('fin_add_memo',{p_payout_id:id,p_body:body});
+  if(IS_SUPA)return _payExWrite(id,j=>{j.m=(j.m||[]).concat([{i:uid('mm'),a:ME().name,b:body,t:fmtTs(new Date().toISOString()).slice(0,16)}]);}).catch(()=>{});
   (MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body,at:fmtTs(new Date().toISOString()).slice(0,16)});
   return Promise.resolve();
 }
@@ -2126,7 +2144,8 @@ function clearDeposit(id){delete DEPOSITS[id];_pushDep(id,'',0,'');saveDeposits(
 /* ── 이체 입금확인 (지급 날짜·금액 수기 기입, 정채영 전용) — 금액은 evidence_url의 #D{json}에 저장 ── */
 function _pushPayConfirm(id,d,amt){if(!IS_SUPA){const r=DB.payout.find(x=>x.id===id);if(r){r.paidAt=d||'';r.payConfirmAmt=amt||0;}return Promise.resolve();}
   const r=DB.payout.find(x=>x.id===id);const url=r?(r.evidence||''):'';
-  const ev=(amt?('#D'+JSON.stringify({a:amt})+'#D'):'')+url;
+  const j=Object.assign({},(r&&r._ex)||{});if(amt)j.a=amt;else delete j.a;
+  const ev=(Object.keys(j).length?('#D'+JSON.stringify(j)+'#D'):'')+url;if(r)r._ex=Object.keys(j).length?j:null;
   return sb.from('fin_payouts').update({paid_date:d||null,evidence_url:ev}).eq('id',id).then(({error})=>{if(error){toast(error.message,'err');throw error;}if(r){r.paidAt=d||'';r.payConfirmAmt=amt||0;}});}
 function openPayConfirm(id){const r=DB.payout.find(x=>x.id===id);if(!r||(IS_SUPA&&!canManageAll()))return;
   modal('💰 입금(지급) 확인 기입','',`<div class="dl"><dt>거래처</dt><dd>${escH(r.payee)}</dd><dt>요청 금액</dt><dd><b>${won(r.amount)} ${escH(r.unit)}</b></dd></div>
@@ -2586,7 +2605,7 @@ async function loadMe(){
   SUPA_USER={email,role,name,team,av:(name||'·').slice(0,1),rl:roleLabel(role)};ROLE=role;
 }
 function fmtTs(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
-function _mapPayout(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:dx.url,payConfirmAmt:dx.a||0,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
+function _mapPayout(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:dx.url,payConfirmAmt:dx.a||0,_ex:dx.j||null,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
 function _mapInvoice(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:dx.url,depAmt:dx.a||0,depNote:dx.n||'',addr:dx.ad||'',bizType:dx.bt||'',bizItem:dx.bi||'',status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||'',paidConfirm:r.paid_confirm_date||''};}
 function _mapCoupon(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,name:r.recipient_name,phone:r.recipient_phone,phoneNorm:r.recipient_phone_norm,amount:Number(r.amount)||0,code:r.code||'',status:r.status,hold:r.hold_reason||'',isOverride:r.is_override,memo:r.memo||'',createdAt:(r.created_at||'').slice(0,10)};}
 function _mapExpense(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
@@ -2610,7 +2629,7 @@ async function loadData(){
   DB.coupons=(cp||[]).map(_mapCoupon);
   try{const{data:stk}=await sb.rpc('fin_coupon_stock');COUPON_STOCK=Number(stk)||0;}catch(e){COUPON_STOCK=0;}
   try{const{data:crt}=await sb.rpc('fin_card_report_to');if(crt)CARD_REPORT_TO=crt;}catch(e){}
-  MEMOS={};try{const{data:mm}=await sb.from('fin_memos').select('*').order('created_at',{ascending:true});(mm||[]).forEach(m=>{(MEMOS[m.payout_id]=MEMOS[m.payout_id]||[]).push({id:m.id,author:m.author_name||'',body:m.body,at:(m.created_at||'').slice(0,16).replace('T',' ')});});}catch(e){}
+  MEMOS={};DB.payout.forEach(r=>{if(r._ex&&Array.isArray(r._ex.m)&&r._ex.m.length)MEMOS[r.id]=_memosOf(r._ex.m);});
 }
 /* 저장: 실모드=RPC→새로고침 / 데모=mockFn */
 function sv(rpc,args,mockFn){if(!IS_SUPA){if(mockFn)mockFn();return Promise.resolve(true);}return sb.rpc(rpc,args).then(({data,error})=>{if(error){toast(error.message||'오류가 났어요','err');throw error;}return loadData();});}
