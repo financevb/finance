@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261020a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261023a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -363,6 +363,13 @@ function comma(s){s=String(s||'');const neg=s.trim().startsWith('-');return (neg
 function val(id){const el=document.getElementById(id);return el?el.value.trim():'';}
 function numVal(id){const s=String(val(id));const neg=s.trim().startsWith('-');const n=Number(s.replace(/[^0-9]/g,''))||0;return neg?-n:n;}
 function digits(s){return String(s||'').replace(/[^0-9]/g,'');}
+/* 외화 금액 입력 — 통화가 원이 아니면 소수점 둘째 자리까지 허용 (원은 기존처럼 정수만) */
+function isFx(u){return !!u&&u!=='원';}
+function commaAmt(s,unit){s=String(s||'');const fx=isFx(unit);const neg=s.trim().startsWith('-');if(!fx){const k=s.indexOf('.');if(k>=0)s=s.slice(0,k);}let t=s.replace(fx?/[^0-9.]/g:/[^0-9]/g,'');let dec='';
+  if(fx){const i=t.indexOf('.');if(i>=0){dec='.'+t.slice(i+1).replace(/\./g,'').slice(0,2);t=t.slice(0,i);}}
+  return (neg?'-':'')+t.replace(/\B(?=(\d{3})+(?!\d))/g,',')+dec;}
+function amtVal(id,unit){let s=String(val(id));const neg=s.trim().startsWith('-');if(!isFx(unit)){const k=s.indexOf('.');if(k>=0)s=s.slice(0,k);}const n=isFx(unit)?Math.round((parseFloat(s.replace(/[^0-9.]/g,''))||0)*100)/100:(Number(s.replace(/[^0-9]/g,''))||0);return neg?-n:n;}
+function reformatAmt(amtId,unitId){const e=document.getElementById(amtId);if(e)e.value=commaAmt(e.value,val(unitId));}
 /* 사람 이름이 좁은 칸에서 줄바꿈될 때 성 단위로만 끊기게(홍/찬주). .nmcell(word-break:keep-all)과 함께 사용. */
 const _SUR2=['남궁','선우','독고','황보','제갈','사공','서문','동방','어금','망절','등정'];
 function nameWrap(s){s=String(s||'');if(!/^[가-힣]{2,5}$/.test(s))return escH(s);var cut=_SUR2.indexOf(s.slice(0,2))>=0?2:1;return escH(s.slice(0,cut))+'<wbr>'+escH(s.slice(cut));}
@@ -783,7 +790,7 @@ function render(){
   const p=PAGES[current];
   document.getElementById('pgTitle').textContent=p.t;document.getElementById('pgDesc').textContent=p.d;
   let act='';
-  if(current==='payout')act=`${canManageAll()?`<button class="btn btn-line" onclick="openLedgerCompare()">📒 매입 대조</button>`:''}<button class="btn btn-line" onclick="openWHForm()">3.3% 지급</button><button class="btn btn-line" onclick="openBulkForm()">일괄</button><button class="btn btn-primary" onclick="openPayoutForm()">${I.plus}<span>새 이체 요청</span></button>`;
+  if(current==='payout')act=`${canManageAll()?`<button class="btn btn-line" onclick="openLedgerCompare()">📒 매입 대조</button>`:''}<button class="btn btn-line" onclick="openWHForm()">3.3% 지급</button><button class="btn btn-line" onclick="openFXForm()">외화 지급</button><button class="btn btn-line" onclick="openBulkForm()">일괄</button><button class="btn btn-primary" onclick="openPayoutForm()">${I.plus}<span>새 이체 요청</span></button>`;
   if(current==='fuel')act=`<button class="btn btn-primary" onclick="openFuelForm()">${I.car}<span>유류비 신청</span></button>`;
   if(current==='expense')act=`<button class="btn btn-primary" onclick="openExpenseForm()">${I.plus}<span>지출결의 등록</span></button>`;
   if(current==='cardreport')act=`<button class="btn btn-line btn-sm" onclick="openCardBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openCardForm()">${I.plus}<span>기명 법카 신고</span></button>`;
@@ -1134,7 +1141,7 @@ function openPayoutForm(seed){
     <div class="form-row"><label>거래처/예금주 <span class="req">*</span><span class="hint">기존 거래처는 선택하면 최근 계좌 자동입력 · 신규는 이름을 그대로 입력</span></label><div class="payeewrap"><input class="input" id="f_payee" value="${escH(seed.payee||'')}" placeholder="거래처명" autocomplete="off" oninput="onPayeeInput()"><button type="button" class="plbtn" tabindex="-1" onclick="togglePayeeList()">▾</button><div class="plist" id="payeeList"></div></div></div>
     <div class="form-row"><label>사업자등록번호<span class="hint">신규 여부 확인용 · 개인은 비워두세요 (- 상관없음)</span></label><input class="input num" id="f_bizno" value="${escH(seed.bizNo||'')}" placeholder="10자리" oninput="dupHint()"></div>
     <div class="f2"><div class="form-row"><label>은행 <span class="req">*</span></label><select class="input" id="f_bank">${banks}</select></div><div class="form-row"><label>계좌번호 <span class="req">*</span></label><input class="input num" id="f_account" value="${escH(seed.account||'')}" placeholder="- 없이 숫자" oninput="dupHint()"></div></div>
-    <div class="f2"><div class="form-row"><label>금액 <span class="req">*</span></label><input class="input num" id="f_amount" value="${seed.amount?won(seed.amount):''}" placeholder="0" oninput="this.value=comma(this.value);dupHint()"></div><div class="form-row"><label>통화</label><select class="input" id="f_unit">${cur}</select></div></div>
+    <div class="f2"><div class="form-row"><label>금액 <span class="req">*</span></label><input class="input num" id="f_amount" inputmode="decimal" value="${seed.amount?won(seed.amount):''}" placeholder="0" oninput="this.value=commaAmt(this.value,val('f_unit'));dupHint()"></div><div class="form-row"><label>통화<span class="hint">외화는 소수점 2자리까지</span></label><select class="input" id="f_unit" onchange="reformatAmt('f_amount','f_unit');dupHint()">${cur}</select></div></div>
     <div class="f2"><div class="form-row"><label>이체 희망일 <span class="req">*</span><span class="hint">실제 이체가 필요한 날</span></label><input class="input" type="date" id="f_duedate" value="${seedDue||today()}" onchange="syncProofDate(this.value)"></div><div class="form-row"><label>분류</label><select class="input" id="f_cat">${cats}</select></div></div>
     <div class="form-row"><label>적요/메모</label><textarea class="input" id="f_purpose" placeholder="예: 6월 광고비 정산">${escH(seed.purpose||'')}</textarea></div>
     <div style="border:1px solid var(--gray-200);border-radius:var(--r-md);padding:12px 13px;margin:2px 0 12px;background:#f8f9fb">
@@ -1204,7 +1211,7 @@ function onPayeePick(){
   }
   dupHint();
 }
-function dupHint(){const el=document.getElementById('f_anom');if(!el)return;const amt=numVal('f_amount');const unit=val('f_unit')||'원';const r={payee:val('f_payee'),account:val('f_account'),amount:amt,unit,category:val('f_cat'),applied:today(),requester:ME().name};if(!r.payee){el.innerHTML='';return;}const flags=scanPayout(r,_editPayoutId);const big=unit==='원'&&amt>=THRESHOLD;const vend=findVendor(r.payee);
+function dupHint(){const el=document.getElementById('f_anom');if(!el)return;const unit=val('f_unit')||'원';const amt=amtVal('f_amount',unit);const r={payee:val('f_payee'),account:val('f_account'),amount:amt,unit,category:val('f_cat'),applied:today(),requester:ME().name};if(!r.payee){el.innerHTML='';return;}const flags=scanPayout(r,_editPayoutId);const big=unit==='원'&&amt>=THRESHOLD;const vend=findVendor(r.payee);
   const bizNorm=digits(val('f_bizno'));
   const vByBiz=bizNorm?vendorByBiz(bizNorm):null;
   const isNew=r.payee?(bizNorm.length>=10?!vByBiz:!vend):false;
@@ -1215,7 +1222,7 @@ let _paySubmitting=false; /* 저장 연타 시 중복 등록 방지 */
 function submitPayout(){
   if(_paySubmitting)return;
   const pt=val('f_prooftype'),adeq=PROOF_ADEQ.has(pt);
-  const r={id:uid('p'),requester:ME().name,team:ME().team,payee:val('f_payee'),bank:val('f_bank'),account:val('f_account'),amount:numVal('f_amount'),unit:val('f_unit')||'원',category:val('f_cat'),purpose:val('f_purpose'),evidence:val('f_evidence'),proofType:pt,proofDate:adeq?val('f_proofdate'):'',proofStatus:adeq?(val('f_proofstatus')||'받을예정'):'',proofReason:pt==='none'?val('f_proofreason'):'',proofReceivedAt:(adeq&&val('f_proofstatus')==='수취완료')?today():'',hasTax:pt==='세금계산서',status:'requested',applied:today(),paidAt:''};
+  const r={id:uid('p'),requester:ME().name,team:ME().team,payee:val('f_payee'),bank:val('f_bank'),account:val('f_account'),amount:amtVal('f_amount',val('f_unit')||'원'),unit:val('f_unit')||'원',category:val('f_cat'),purpose:val('f_purpose'),evidence:val('f_evidence'),proofType:pt,proofDate:adeq?val('f_proofdate'):'',proofStatus:adeq?(val('f_proofstatus')||'받을예정'):'',proofReason:pt==='none'?val('f_proofreason'):'',proofReceivedAt:(adeq&&val('f_proofstatus')==='수취완료')?today():'',hasTax:pt==='세금계산서',status:'requested',applied:today(),paidAt:''};
   const due=val('f_duedate');
   if(due)r.purpose='[희망 '+due+'] '+(r.purpose||'');
   if(!r.payee||!r.account||!r.amount){toast('거래처·계좌·금액은 필수예요.','err');return;}
@@ -1552,6 +1559,37 @@ function submitWH(){
   r.approver=approverFor(r.requester,net);
   sv('fin_submit_payout',{p:payoutPayload(r,0)},()=>{DB.payout.unshift(r);}).then(()=>{closeModal();current='payout';render();toast('원천징수 지급 신청 등록 (실지급 '+won(net)+'원).','ok');});
 }
+/* ===================== 외화 지급 (해외 거래처 외화 송금) ===================== */
+const FX_UNITS=['USD','EUR','JPY'];
+function openFXForm(){
+  const cats=CATEGORIES.filter(x=>x!=='유류비').map(x=>`<option ${x==='물품대금'?'selected':''}>${x}</option>`).join('');
+  modal('외화 지급 신청','wide',`<div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">💱 해외 거래처 외화 송금</b> — 금액은 <b>소수점 둘째 자리</b>까지 입력할 수 있어요. 외화는 은행 승인 후 이체돼요. 수입 물품대금이면 <b>선적지·하적지</b>도 적어주세요.</div>
+    <div class="form-row"><label>수취인 (Beneficiary) <span class="req">*</span><span class="hint">영문 이름 그대로</span></label><input class="input" id="x_name" placeholder="예: NINGBO AOZEN BABY PRODUCT" autocomplete="off"></div>
+    <div class="f2"><div class="form-row"><label>수취 은행명 <span class="req">*</span></label><input class="input" id="x_bank" placeholder="예: BANK OF CHINA NINGBO BRANCH"></div><div class="form-row"><label>SWIFT 코드<span class="hint">있으면 입력</span></label><input class="input num" id="x_swift" placeholder="8 또는 11자리" maxlength="11" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"></div></div>
+    <div class="form-row"><label>계좌번호 / IBAN <span class="req">*</span></label><input class="input num" id="x_acc" placeholder="계좌번호"></div>
+    <div class="f2"><div class="form-row"><label>외화 금액 <span class="req">*</span><span class="hint">소수점 둘째 자리까지</span></label><input class="input num" id="x_amount" inputmode="decimal" placeholder="0.00" oninput="this.value=commaAmt(this.value,val('x_unit'))"></div><div class="form-row"><label>통화</label><select class="input" id="x_unit" onchange="reformatAmt('x_amount','x_unit')">${FX_UNITS.map(u=>`<option>${u}</option>`).join('')}</select></div></div>
+    <div class="f2"><div class="form-row"><label>이체 희망일 <span class="req">*</span><span class="hint">실제 이체가 필요한 날</span></label><input class="input" type="date" id="x_duedate" value="${today()}"></div><div class="form-row"><label>분류</label><select class="input" id="x_cat">${cats}</select></div></div>
+    <div class="f2"><div class="form-row"><label>선적지<span class="hint">수입 물품대금이면 필수</span></label><input class="input" id="x_ship" placeholder="예: 중국 닝보 (NINGBO, CHINA)"></div><div class="form-row"><label>하적지<span class="hint">수입 물품대금이면 필수</span></label><input class="input" id="x_dest" placeholder="예: 대한민국 인천 (INCHEON, KOREA)"></div></div>
+    <div class="form-row"><label>적요/메모</label><input class="input" id="x_memo" placeholder="예: 8월 생산대금 / PI No."></div>
+    <div class="form-row"><label>증빙 링크 (PI·Invoice, Dropbox)<span class="hint">있으면 입력</span></label><input class="input" id="x_ev" placeholder="https://www.dropbox.com/..."></div>
+  `,`<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="submitFX()">신청</button>`);
+}
+function submitFX(){
+  const unit=val('x_unit')||'USD',amt=amtVal('x_amount',unit),name=val('x_name'),bank=val('x_bank'),acc=val('x_acc'),swift=val('x_swift').toUpperCase();
+  if(!name||!bank||!acc||!amt){toast('수취인·은행·계좌·금액은 필수예요.','err');return;}
+  if(amt<=0){toast('금액은 0보다 커야 해요.','err');return;}
+  if(swift&&!/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(swift)){toast('SWIFT 코드는 영문·숫자 8자리 또는 11자리예요.','err');return;}
+  if(isLockedMonth(today())){toast(today().slice(0,7)+'은 마감되어 신청할 수 없어요.','err');return;}
+  const due=val('x_duedate'),ship=val('x_ship'),dest=val('x_dest'),ev=val('x_ev');
+  if(!due){toast('이체 희망일을 선택해 주세요.','err');return;}
+  if(val('x_cat')==='물품대금'&&(!ship||!dest)&&!confirm('물품대금인데 선적지·하적지가 비어 있어요. 이대로 신청할까요?'))return;
+  const tags=[];if(swift)tags.push('SWIFT '+swift);if(ship)tags.push('선적지 '+ship);if(dest)tags.push('하적지 '+dest);
+  let purpose=val('x_memo')||'외화 송금';if(tags.length)purpose+=' ['+tags.join(' / ')+']';
+  purpose='[희망 '+due+'] '+purpose;
+  const r={id:uid('p'),requester:ME().name,team:ME().team,payee:name,bank,account:acc,amount:amt,unit,category:val('x_cat'),purpose,evidence:ev,proofType:ev?'명세서':'none',proofDate:'',proofStatus:'',proofReason:ev?'':'해외송금 (외화 지급)',hasTax:false,status:'requested',applied:today(),paidAt:''};
+  r.approver=approverFor(r.requester,amt);
+  sv('fin_submit_payout',{p:payoutPayload(r,0)},()=>{DB.payout.unshift(r);}).then(()=>{closeModal();current='payout';render();toast('외화 지급 신청 등록 ('+won(amt)+' '+unit+').','ok');});
+}
 /* ===================== 이체 일괄 입력(엑셀 붙여넣기) ===================== */
 function openBulkForm(){
   modal('이체 일괄 입력','wide',`<div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">📥 엑셀에서 복사 → 아래에 붙여넣기</b><br>한 줄에 하나씩, <b>예금주 · 은행 · 계좌 · 금액 · 적요</b> 순서 (탭/콤마 구분). 적요는 생략 가능.</div>
@@ -1691,7 +1729,7 @@ function openExpenseForm(seed){
     <div class="t-sub" style="margin:0 0 12px">신청인: <b>${escH(ME().name)}</b>${ME().team?' · '+escH(normalizeTeam(ME().team)):''} <span style="color:var(--gray)">(등록 시 자동 기록)</span></div>
     <div class="f2"><div class="form-row"><label>결제수단 <span class="req">*</span></label><select class="input" id="e_method" onchange="expMethodChange()">${meth}</select></div><div class="form-row"><label>사용일 <span class="req">*</span></label><input class="input" type="date" id="e_date" value="${seed.spentDate||today()}"></div></div>
     <div class="form-row"><label>사용처 <span class="req">*</span><span class="hint">카드전표·영수증에 찍힌 가맹점명 그대로</span></label><input class="input" id="e_merchant" value="${escH(seed.merchant||'')}" placeholder="예: 쿠팡 / 스타벅스 역삼점"></div>
-    <div class="f2"><div class="form-row"><label>금액 <span class="req">*</span></label><input class="input num" id="e_amount" value="${seed.amount?won(seed.amount):''}" placeholder="0" oninput="this.value=comma(this.value)"></div><div class="form-row"><label>통화</label><select class="input" id="e_unit">${cur}</select></div></div>
+    <div class="f2"><div class="form-row"><label>금액 <span class="req">*</span></label><input class="input num" id="e_amount" inputmode="decimal" value="${seed.amount?won(seed.amount):''}" placeholder="0" oninput="this.value=commaAmt(this.value,val('e_unit'))"></div><div class="form-row"><label>통화<span class="hint">외화는 소수점 2자리까지</span></label><select class="input" id="e_unit" onchange="reformatAmt('e_amount','e_unit')">${cur}</select></div></div>
     <div class="form-row"><label>분류</label><select class="input" id="e_cat">${cats}</select></div>
     <div class="form-row"><label>사용 목적 <span class="req">*</span></label><textarea class="input" id="e_purpose" placeholder="예: 촬영용 소품 구매 / 브랜드팀 주간회의 다과">${escH(seed.purpose||'')}</textarea></div>
     <div class="form-row"><label>동반 인원<span class="hint">선택 · 식대·접대성 지출은 적어주시면 나중에 소명하기 쉬워요</span></label><input class="input" id="e_attend" value="${escH(seed.attendees||'')}" placeholder="예: 브랜드팀 5명"></div>
@@ -1710,7 +1748,7 @@ function openCardForm(seed){
     <div class="f2"><div class="form-row"><label>카드 명의자 <span class="req">*</span></label><input class="input" id="e_holder" value="${escH(seed.cardHolder||ME().name)}"></div><div class="form-row"><label>카드번호 뒤 4자리 <span class="req">*</span></label><input class="input num" id="e_last4" value="${escH(seed.cardLast4||lastCardOf(ME().name))}" maxlength="4" placeholder="4417" oninput="this.value=this.value.replace(/[^0-9]/g,'')"></div></div>
     <div class="f2"><div class="form-row"><label>사용일 <span class="req">*</span></label><input class="input" type="date" id="e_date" value="${seed.spentDate||today()}"></div><div class="form-row"><label>분류</label><select class="input" id="e_cat">${cats}</select></div></div>
     <div class="form-row"><label>사용처 <span class="req">*</span><span class="hint">카드 이용내역에 찍힌 가맹점명 그대로</span></label><input class="input" id="e_merchant" value="${escH(seed.merchant||'')}" placeholder="예: GS칼텍스 논현점"></div>
-    <div class="f2"><div class="form-row"><label>금액 <span class="req">*</span></label><input class="input num" id="e_amount" value="${seed.amount?won(seed.amount):''}" placeholder="0" oninput="this.value=comma(this.value)"></div><div class="form-row"><label>통화</label><select class="input" id="e_unit">${cur}</select></div></div>
+    <div class="f2"><div class="form-row"><label>금액 <span class="req">*</span></label><input class="input num" id="e_amount" inputmode="decimal" value="${seed.amount?won(seed.amount):''}" placeholder="0" oninput="this.value=commaAmt(this.value,val('e_unit'))"></div><div class="form-row"><label>통화<span class="hint">외화는 소수점 2자리까지</span></label><select class="input" id="e_unit" onchange="reformatAmt('e_amount','e_unit')">${cur}</select></div></div>
     <div class="form-row"><label>사용 목적 <span class="req">*</span></label><textarea class="input" id="e_purpose" placeholder="예: 베이비페어 부스 설치 이동">${escH(seed.purpose||'')}</textarea></div>
     <div class="form-row"><label>동반 인원<span class="hint">선택 · 식대·접대성 지출은 적어주시면 나중에 소명하기 쉬워요</span></label><input class="input" id="e_attend" value="${escH(seed.attendees||'')}" placeholder="예: M&amp;E팀 3명"></div>
     ${expProofBoxHtml(seed,'카드전표')}
@@ -1724,7 +1762,7 @@ function submitExpense(named){
     method:named?'named_card':(val('e_method')||'corp_card'),
     cardLast4:named?digits(val('e_last4')).slice(-4):'',
     cardHolder:named?(val('e_holder')||ME().name):'',
-    spentDate:val('e_date')||today(),merchant:val('e_merchant'),amount:numVal('e_amount'),
+    spentDate:val('e_date')||today(),merchant:val('e_merchant'),amount:amtVal('e_amount',val('e_unit')||'원'),
     unit:val('e_unit')||'원',category:val('e_cat'),purpose:val('e_purpose'),attendees:val('e_attend'),
     proofType:pt,proofUrl:val('e_proofurl'),proofReason:pt==='none'?val('e_proofreason'):'',
     status:'requested',applied:today()};
