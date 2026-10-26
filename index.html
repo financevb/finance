@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261026a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261026b'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -2364,7 +2364,8 @@ async function runSheetSync(){
     log(`이체 신규 ${newPays.length}건, 세금계산서 신규 ${newInvs.length}건 등록 중…`);
     let ok=0,fail=0,iok=0,ifail=0;const failMsgs=[];
     for(const x of newPays){
-      const p={payee:x.payee,bank:x.bank,account:x.account,amount:x.amount,unit:x.unit,category:_syncCat(x.purpose),purpose:x.purpose,evidence:'',hasTax:x.tax,proofType:x.tax?'세금계산서':'none',proofDate:x.tax?(x.tdate||x.applied):'',proofStatus:x.tax?'받을예정':'',proofReason:x.tax?'':'시트 동기화 건',wh:null,fuel:null,requester_name:x.requester,team:x.team,recurTotal:0};
+      const _fp=_fxPack(x.amount,x.purpose);
+      const p={payee:x.payee,bank:x.bank,account:x.account,amount:_fp.amount,unit:x.unit,category:_syncCat(x.purpose),purpose:_fp.purpose,evidence:'',hasTax:x.tax,proofType:x.tax?'세금계산서':'none',proofDate:x.tax?(x.tdate||x.applied):'',proofStatus:x.tax?'받을예정':'',proofReason:x.tax?'':'시트 동기화 건',wh:null,fuel:null,requester_name:x.requester,team:x.team,recurTotal:0};
       const {error}=DRY?{error:null}:await sb.rpc('fin_submit_payout',{p});
       if(error){fail++;failMsgs.push('[이체] '+x.payee+': '+error.message);}else ok++;
     }
@@ -2648,7 +2649,7 @@ function fmtTs(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '
 function _mapPayout(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);const fx=_fxSplit(r.purpose,r.amount);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:fx.amount,unit:r.currency||'원',category:r.category,purpose:fx.purpose,evidence:dx.url,payConfirmAmt:dx.a||0,_ex:dx.j||null,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
 function _mapInvoice(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:dx.url,depAmt:dx.a||0,depNote:dx.n||'',addr:dx.ad||'',bizType:dx.bt||'',bizItem:dx.bi||'',status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||'',paidConfirm:r.paid_confirm_date||''};}
 function _mapCoupon(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,name:r.recipient_name,phone:r.recipient_phone,phoneNorm:r.recipient_phone_norm,amount:Number(r.amount)||0,code:r.code||'',status:r.status,hold:r.hold_reason||'',isOverride:r.is_override,memo:r.memo||'',createdAt:(r.created_at||'').slice(0,10)};}
-function _mapExpense(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
+function _mapExpense(r){const fx=_fxSplit(r.purpose,r.amount);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:fx.amount,unit:r.currency||'원',category:r.category||'',purpose:fx.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
 async function fetchAllRows(factory){const PAGE=1000;let from=0,all=[];for(;;){const{data,error}=await factory().range(from,from+PAGE-1);if(error)throw error;all=all.concat(data||[]);if(!data||data.length<PAGE)break;from+=PAGE;}return all;}
 async function loadData(){
   if(!IS_SUPA)return;
@@ -2677,7 +2678,7 @@ function sv(rpc,args,mockFn){if(!IS_SUPA){if(mockFn)mockFn();return Promise.reso
 function _fxPack(amount,purpose){const n=Number(amount)||0;if(Number.isInteger(n))return {amount:n,purpose:purpose};return {amount:Math.round(n),purpose:String(purpose||'').replace(/\s*\[금액 -?[\d.]+\]\s*$/,'')+' [금액 '+n.toFixed(2)+']'};}
 function _fxSplit(purpose,amount){const p=String(purpose||'');const m=p.match(/\s*\[금액 (-?\d+(?:\.\d+)?)\]\s*$/);if(!m)return {amount:Number(amount)||0,purpose:purpose};return {amount:Number(m[1]),purpose:p.slice(0,m.index)};}
 function payoutPayload(r,recurTotal){const fp=_fxPack(r.amount,r.purpose);return {payee:r.payee,bank:r.bank,account:r.account,amount:fp.amount,unit:r.unit,category:r.category,purpose:fp.purpose,evidence:r.evidence||'',hasTax:!!r.hasTax,proofType:r.proofType||'',proofDate:r.proofDate||'',proofStatus:r.proofStatus||'',proofReason:r.proofReason||'',wh:r.wh||null,fuel:r.fuel||null,requester_name:ME().name,team:ME().team,recurTotal:recurTotal||0};}
-function expensePayload(r){return {method:r.method,cardLast4:r.cardLast4||'',cardHolder:r.cardHolder||'',spentDate:r.spentDate,merchant:r.merchant,amount:r.amount,unit:r.unit||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proofType||'',proofUrl:r.proofUrl||'',proofReason:r.proofReason||'',requester_name:ME().name,team:ME().team};}
+function expensePayload(r){const fp=_fxPack(r.amount,r.purpose||'');return {method:r.method,cardLast4:r.cardLast4||'',cardHolder:r.cardHolder||'',spentDate:r.spentDate,merchant:r.merchant,amount:fp.amount,unit:r.unit||'원',category:r.category||'',purpose:fp.purpose||'',attendees:r.attendees||'',proofType:r.proofType||'',proofUrl:r.proofUrl||'',proofReason:r.proofReason||'',requester_name:ME().name,team:ME().team};}
 function invoicePayload(r){return {company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:r.writeDate,itemName:r.itemName,supply:r.supply,vat:r.tax,total:r.total,evidence:_invEv(r.evidence||'',r.addr,r.bizType,r.bizItem),requester_name:ME().name,team:ME().team};}
 /* ── 로그인 (이메일 OTP) ── */
 let _loginEmail='';
