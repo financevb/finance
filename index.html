@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261023a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261026a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -358,7 +358,7 @@ const APP_VERSION='v20261023a'; /* 배포 시마다 갱신 — 새 버전 안내
   }catch(e){}}
   setTimeout(chk,5000);setInterval(chk,5*60*1000);
 })();
-function won(n){return (Number(n)||0).toLocaleString('ko-KR');}
+function won(n){n=Number(n)||0;return Number.isInteger(n)?n.toLocaleString('ko-KR'):n.toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2});} /* 외화 소수는 455.50처럼 항상 2자리 */
 function comma(s){s=String(s||'');const neg=s.trim().startsWith('-');return (neg?'-':'')+s.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',');} /* 음수(수정 발행) 지원 */
 function val(id){const el=document.getElementById(id);return el?el.value.trim():'';}
 function numVal(id){const s=String(val(id));const neg=s.trim().startsWith('-');const n=Number(s.replace(/[^0-9]/g,''))||0;return neg?-n:n;}
@@ -2645,7 +2645,7 @@ async function loadMe(){
   SUPA_USER={email,role,name,team,av:(name||'·').slice(0,1),rl:roleLabel(role)};ROLE=role;
 }
 function fmtTs(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
-function _mapPayout(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category,purpose:r.purpose,evidence:dx.url,payConfirmAmt:dx.a||0,_ex:dx.j||null,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
+function _mapPayout(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);const fx=_fxSplit(r.purpose,r.amount);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,payee:r.payee,bank:normBank(r.bank),account:r.account,amount:fx.amount,unit:r.currency||'원',category:r.category,purpose:fx.purpose,evidence:dx.url,payConfirmAmt:dx.a||0,_ex:dx.j||null,hasTax:r.has_tax,proofType:r.proof_type||'',proofDate:r.proof_date||'',proofStatus:r.proof_status||'',proofReason:r.proof_none_reason||'',proofReceivedAt:r.proof_received_at||'',status:r.status,paidAt:r.paid_date||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,wh:r.wh,fuel:r.fuel};}
 function _mapInvoice(r){const ts=fmtTs(r.created_at);const dx=_depExtra(r.evidence_url);return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email||'',team:r.team,saleType:r.sale_type,bizNo:r.biz_no,company:r.company,ceo:r.ceo,email:r.email,writeDate:r.write_date,itemName:r.item_name,supply:Number(r.supply)||0,tax:Number(r.vat)||0,total:Number(r.total)||0,evidence:dx.url,depAmt:dx.a||0,depNote:dx.n||'',addr:dx.ad||'',bizType:dx.bt||'',bizItem:dx.bi||'',status:r.status,rejectReason:r.reject_reason||'',applied:ts?ts.slice(0,10):(r.created_at||'').slice(0,10),appliedTs:ts,issuedAt:r.issued_date||'',paidConfirm:r.paid_confirm_date||''};}
 function _mapCoupon(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,name:r.recipient_name,phone:r.recipient_phone,phoneNorm:r.recipient_phone_norm,amount:Number(r.amount)||0,code:r.code||'',status:r.status,hold:r.hold_reason||'',isOverride:r.is_override,memo:r.memo||'',createdAt:(r.created_at||'').slice(0,10)};}
 function _mapExpense(r){return {id:r.id,requester:r.requester_name,requesterEmail:r.requester_email,team:r.team,method:r.method,cardLast4:r.card_last4||'',cardHolder:r.card_holder||'',spentDate:r.spent_date||'',merchant:r.merchant,amount:Number(r.amount)||0,unit:r.currency||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proof_type||'',proofUrl:r.proof_url||'',proofReason:r.proof_none_reason||'',status:r.status,rejectReason:r.reject_reason||'',decidedBy:r.decided_by||'',applied:(r.created_at||'').slice(0,10)};}
@@ -2673,7 +2673,10 @@ async function loadData(){
 }
 /* 저장: 실모드=RPC→새로고침 / 데모=mockFn */
 function sv(rpc,args,mockFn){if(!IS_SUPA){if(mockFn)mockFn();return Promise.resolve(true);}return sb.rpc(rpc,args).then(({data,error})=>{if(error){toast(error.message||'오류가 났어요','err');throw error;}return loadData();});}
-function payoutPayload(r,recurTotal){return {payee:r.payee,bank:r.bank,account:r.account,amount:r.amount,unit:r.unit,category:r.category,purpose:r.purpose,evidence:r.evidence||'',hasTax:!!r.hasTax,proofType:r.proofType||'',proofDate:r.proofDate||'',proofStatus:r.proofStatus||'',proofReason:r.proofReason||'',wh:r.wh||null,fuel:r.fuel||null,requester_name:ME().name,team:ME().team,recurTotal:recurTotal||0};}
+/* 서버 금액 칸이 정수(bigint)라 소수 외화 금액(455.50)은 amount엔 반올림 정수, 정확한 값은 적요 끝 [금액 455.50] 태그로 저장 → 불러올 때 복원 */
+function _fxPack(amount,purpose){const n=Number(amount)||0;if(Number.isInteger(n))return {amount:n,purpose:purpose};return {amount:Math.round(n),purpose:String(purpose||'').replace(/\s*\[금액 -?[\d.]+\]\s*$/,'')+' [금액 '+n.toFixed(2)+']'};}
+function _fxSplit(purpose,amount){const p=String(purpose||'');const m=p.match(/\s*\[금액 (-?\d+(?:\.\d+)?)\]\s*$/);if(!m)return {amount:Number(amount)||0,purpose:purpose};return {amount:Number(m[1]),purpose:p.slice(0,m.index)};}
+function payoutPayload(r,recurTotal){const fp=_fxPack(r.amount,r.purpose);return {payee:r.payee,bank:r.bank,account:r.account,amount:fp.amount,unit:r.unit,category:r.category,purpose:fp.purpose,evidence:r.evidence||'',hasTax:!!r.hasTax,proofType:r.proofType||'',proofDate:r.proofDate||'',proofStatus:r.proofStatus||'',proofReason:r.proofReason||'',wh:r.wh||null,fuel:r.fuel||null,requester_name:ME().name,team:ME().team,recurTotal:recurTotal||0};}
 function expensePayload(r){return {method:r.method,cardLast4:r.cardLast4||'',cardHolder:r.cardHolder||'',spentDate:r.spentDate,merchant:r.merchant,amount:r.amount,unit:r.unit||'원',category:r.category||'',purpose:r.purpose||'',attendees:r.attendees||'',proofType:r.proofType||'',proofUrl:r.proofUrl||'',proofReason:r.proofReason||'',requester_name:ME().name,team:ME().team};}
 function invoicePayload(r){return {company:r.company,bizNo:r.bizNo,ceo:r.ceo,email:r.email,saleType:r.saleType,writeDate:r.writeDate,itemName:r.itemName,supply:r.supply,vat:r.tax,total:r.total,evidence:_invEv(r.evidence||'',r.addr,r.bizType,r.bizItem),requester_name:ME().name,team:ME().team};}
 /* ── 로그인 (이메일 OTP) ── */
