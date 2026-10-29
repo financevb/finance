@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261026b'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261029a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1359,15 +1359,20 @@ function delMemo(mid,pid){const pr=IS_SUPA?_payExWrite(pid,j=>{j.m=(j.m||[]).fil
 /* 지급완료 메일 알림 — 구글 앱스 스크립트 웹훅 (비어 있으면 발송 안 함) */
 const NOTIFY_URL='https://script.google.com/macros/s/AKfycbxfbRMXRqi3NEU4xqUhH25tPYzsBNAoxVyAG7Vr6lDUTdCiWP4flt4lrL-DTc7H39VK/exec';
 const NOTIFY_SECRET='vbfin-2026-mail';
-function notifyPaid(id){
+const _notifying=new Set(); /* 같은 건 중복 클릭·동시 호출 방지 */
+async function notifyPaid(id){
+  if(_notifying.has(id))return;
+  _notifying.add(id);setTimeout(()=>_notifying.delete(id),60000);
   try{
     if(!NOTIFY_URL||!IS_SUPA)return;
     const r=DB.payout.find(x=>x.id===id);if(!r)return;
     const to=String(r.requesterEmail||'').trim().toLowerCase();
     /* 회사 메일로만, 재무 계정(임포트 건 소유)·본인 처리 건은 제외 */
     if(!/^[a-z0-9._%+-]+@villagebaby\.kr$/.test(to)||to==='cy.j@villagebaby.kr')return;
+    /* 이미 알림 보낸 건(notified_at 있음)은 건너뜀 — 먼저 표시한 쪽만 발송 */
+    const {data,error}=await sb.from('fin_payouts').update({notified_at:new Date().toISOString()}).eq('id',id).is('notified_at',null).select('id');
+    if(!error&&(!data||!data.length))return;
     fetch(NOTIFY_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify({secret:NOTIFY_SECRET,to,name:r.requester||'',payee:r.payee||'',amount:won(r.amount)+(r.unit==='원'?'원':' '+r.unit),date:today(),purpose:purposeText(r)||''})}).catch(()=>{});
-    sb.from('fin_payouts').update({notified_at:new Date().toISOString()}).eq('id',id).then(()=>{});
   }catch(e){}
 }
 function _paidStamp(id){
@@ -1377,7 +1382,19 @@ function _paidStamp(id){
   (MEMOS[id]=MEMOS[id]||[]).push({id:uid('mm'),author:ME().name,body,at:fmtTs(new Date().toISOString()).slice(0,16)});
   return Promise.resolve();
 }
-async function decidePayout(id,status){
+/* 처리 버튼: 누르는 즉시 "처리 중" 안내 + 버튼 잠금(연타·중복 처리 방지), 끝나면 잠금 해제 */
+const _busy=new Set();
+function _guard(key,msg,fn){
+  if(_busy.has(key))return Promise.resolve();
+  _busy.add(key);toast(msg);
+  const bs=[...document.querySelectorAll('#ov .btn')];bs.forEach(b=>{b.disabled=true;});
+  return Promise.resolve().then(fn).finally(()=>{_busy.delete(key);bs.forEach(b=>{b.disabled=false;});});
+}
+function decidePayout(id,status){return _guard('p'+id,status==='paid'?'지급완료 처리 중…':'처리 중…',()=>_decidePayout(id,status));}
+function setPayoutStatus(id,status){return _guard('p'+id,'상태 변경 중…',()=>_setPayoutStatus(id,status));}
+function batchPayout(status){return _guard('batch','처리 중…',()=>_batchPayout(status));}
+function decideInvoice(id,status){return _guard('i'+id,status==='issued'?'발행완료 처리 중…':'처리 중…',()=>_decideInvoice(id,status));}
+async function _decidePayout(id,status){
   if(status==='rejected'&&!canReject()){toast('반려는 정채영님만 할 수 있어요.','err');return;}
   const done=()=>{closeModal();render();toast(status==='paid'?'지급완료로 표시했어요. (처리시각 기록)':'반려했어요.',status==='rejected'?'err':'ok');};
   if(!IS_SUPA){const r=DB.payout.find(x=>x.id===id);if(r){r.status=status;if(status==='paid'){r.paidAt=today();_paidStamp(id);}}done();return;}
@@ -1411,7 +1428,7 @@ function openStatusMenu(id,ev){
   m.style.left=Math.max(8,x)+'px';m.style.top=Math.max(8,y)+'px';
   const bd=document.createElement('div');bd.className='statusbackdrop';bd.id='statusBackdrop';bd.onclick=closeStatusMenu;document.body.appendChild(bd);
 }
-async function setPayoutStatus(id,status){
+async function _setPayoutStatus(id,status){
   closeStatusMenu();
   if(status==='rejected'&&!canReject()){toast('반려는 정채영님만 할 수 있어요.','err');return;}
   const r=DB.payout.find(x=>x.id===id);if(!r||r.status===status)return;
@@ -1433,7 +1450,7 @@ async function setPayoutStatus(id,status){
   if(status==='paid')await _paidStamp(id);
   await loadData();done();
 }
-function batchPayout(status){const ss=DB.payout.filter(r=>_sel.has(r.id)&&r.status==='requested');if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_payout',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>status==='paid'?Promise.all(ss.map(r=>_paidStamp(r.id))):null).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리. (처리시각 기록)','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='paid';r.paidAt=today();_paidStamp(r.id);});_sel=new Set();render();toast(ss.length+'건 지급완료 표시.','ok');}}
+function _batchPayout(status){const ss=DB.payout.filter(r=>_sel.has(r.id)&&r.status==='requested');if(IS_SUPA){return Promise.all(ss.map(r=>sb.rpc('fin_decide_payout',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>status==='paid'?Promise.all(ss.map(r=>_paidStamp(r.id))):null).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리. (처리시각 기록)','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='paid';r.paidAt=today();_paidStamp(r.id);});_sel=new Set();render();toast(ss.length+'건 지급완료 표시.','ok');}}
 /* ---------- 기업은행 대량이체 업로드 파일 만들기 (재무 승인자 전용) ---------- */
 /* 양식: 입금은행 | 입금계좌번호 | 이체금액 | 내통장인쇄내용 | 받는분통장인쇄내용 | CMS코드 */
 const IBK_MYPRINT='빌리지베이비'; /* 받는분 통장에 찍히는 우리 회사 이름 */
@@ -1561,12 +1578,46 @@ function submitWH(){
 }
 /* ===================== 외화 지급 (해외 거래처 외화 송금) ===================== */
 const FX_UNITS=['USD','EUR','JPY'];
+/* 지난 외화 지급에서 자주 쓴 거래처 모음 — 계좌는 인보이스마다 달라서 이름·은행·SWIFT·선적지만 채우고 계좌는 직접 입력 */
+let _fxP=[];
+function fxPayees(){
+  const m={};
+  DB.payout.filter(r=>FX_UNITS.includes(String(r.unit||'').toUpperCase())&&r.payee).slice().sort((a,b)=>String(b.applied||'').localeCompare(String(a.applied||''))).forEach(r=>{
+    const k=r.payee.replace(/[\s.,]/g,'').toUpperCase(),p=r.purpose||'';
+    const o=m[k]||(m[k]={name:r.payee,bank:'',swift:'',ship:'',dest:'',accs:[],n:0});
+    o.n++;
+    if(!o.bank&&r.bank)o.bank=r.bank;
+    if(!o.swift)o.swift=(p.match(/SWIFT ([A-Z0-9]{8,11})/)||[])[1]||'';
+    if(!o.ship)o.ship=(p.match(/선적지 ([^\]\/]+?)\s*(?:\/|\])/)||[])[1]||'';
+    if(!o.dest)o.dest=(p.match(/하적지 ([^\]\/]+?)\s*(?:\/|\])/)||[])[1]||'';
+    if(r.account&&!o.accs.includes(r.account)&&o.accs.length<8)o.accs.push(r.account);
+  });
+  return Object.values(m).sort((a,b)=>b.n-a.n).slice(0,8);
+}
+function fxPick(i){
+  const o=_fxP[i];if(!o)return;
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  set('x_name',o.name);set('x_bank',o.bank);set('x_swift',o.swift);set('x_ship',o.ship);set('x_dest',o.dest);set('x_acc','');
+  document.getElementById('x_accs').innerHTML=o.accs.map(a=>`<option value="${escH(a)}">`).join('');
+  const h=document.getElementById('x_acchint');
+  if(h)h.textContent=o.accs.length?'지난 계좌 '+o.accs.length+'개는 입력칸을 누르면 보여요. 인보이스에 적힌 계좌와 꼭 대조하세요.':'이 거래처는 지난 계좌 기록이 없어요. 인보이스에 적힌 계좌를 입력해 주세요.';
+  document.getElementById('x_acc').focus();
+}
+function fxAccCheck(){
+  const h=document.getElementById('x_acchint'),a=val('x_acc'),name=val('x_name');
+  if(!h||!a)return;
+  const o=_fxP.find(x=>x.name.replace(/[\s.,]/g,'').toUpperCase()===name.replace(/[\s.,]/g,'').toUpperCase());
+  if(o&&o.accs.length&&!o.accs.includes(a))h.innerHTML='<b style="color:var(--warn,#c2410c)">지난 계좌와 달라요.</b> 인보이스 계좌가 맞는지 한 번 더 확인해 주세요.';
+}
 function openFXForm(){
   const cats=CATEGORIES.filter(x=>x!=='유류비').map(x=>`<option ${x==='물품대금'?'selected':''}>${x}</option>`).join('');
+  _fxP=fxPayees();
+  const chips=_fxP.length?`<div class="form-row"><label>자주 보내는 거래처<span class="hint">누르면 이름·은행·SWIFT·선적지가 채워져요</span></label><div style="display:flex;flex-wrap:wrap;gap:6px">${_fxP.map((o,i)=>`<button type="button" class="btn btn-sm btn-line" onclick="fxPick(${i})" title="${escH(o.name)}">${escH(o.name.length>26?o.name.slice(0,26)+'…':o.name)} <span class="t-sub">${o.n}건</span></button>`).join('')}</div></div>`:'';
   modal('외화 지급 신청','wide',`<div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">💱 해외 거래처 외화 송금</b> — 금액은 <b>소수점 둘째 자리</b>까지 입력할 수 있어요. 외화는 은행 승인 후 이체돼요. 수입 물품대금이면 <b>선적지·하적지</b>도 적어주세요.</div>
+    ${chips}
     <div class="form-row"><label>수취인 (Beneficiary) <span class="req">*</span><span class="hint">영문 이름 그대로</span></label><input class="input" id="x_name" placeholder="예: NINGBO AOZEN BABY PRODUCT" autocomplete="off"></div>
     <div class="f2"><div class="form-row"><label>수취 은행명 <span class="req">*</span></label><input class="input" id="x_bank" placeholder="예: BANK OF CHINA NINGBO BRANCH"></div><div class="form-row"><label>SWIFT 코드<span class="hint">있으면 입력</span></label><input class="input num" id="x_swift" placeholder="8 또는 11자리" maxlength="11" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"></div></div>
-    <div class="form-row"><label>계좌번호 / IBAN <span class="req">*</span></label><input class="input num" id="x_acc" placeholder="계좌번호"></div>
+    <div class="form-row"><label>계좌번호 / IBAN <span class="req">*</span><span class="hint">인보이스마다 다를 수 있어요</span></label><input class="input num" id="x_acc" placeholder="인보이스에 적힌 계좌번호" list="x_accs" autocomplete="off" onchange="fxAccCheck()"><datalist id="x_accs"></datalist><div class="t-sub" id="x_acchint"></div></div>
     <div class="f2"><div class="form-row"><label>외화 금액 <span class="req">*</span><span class="hint">소수점 둘째 자리까지</span></label><input class="input num" id="x_amount" inputmode="decimal" placeholder="0.00" oninput="this.value=commaAmt(this.value,val('x_unit'))"></div><div class="form-row"><label>통화</label><select class="input" id="x_unit" onchange="reformatAmt('x_amount','x_unit')">${FX_UNITS.map(u=>`<option>${u}</option>`).join('')}</select></div></div>
     <div class="f2"><div class="form-row"><label>이체 희망일 <span class="req">*</span><span class="hint">실제 이체가 필요한 날</span></label><input class="input" type="date" id="x_duedate" value="${today()}"></div><div class="form-row"><label>분류</label><select class="input" id="x_cat">${cats}</select></div></div>
     <div class="f2"><div class="form-row"><label>선적지<span class="hint">수입 물품대금이면 필수</span></label><input class="input" id="x_ship" placeholder="예: 중국 닝보 (NINGBO, CHINA)"></div><div class="form-row"><label>하적지<span class="hint">수입 물품대금이면 필수</span></label><input class="input" id="x_dest" placeholder="예: 대한민국 인천 (INCHEON, KOREA)"></div></div>
@@ -2133,7 +2184,7 @@ async function _payStat(id){const q=await sb.from('fin_payouts').select('status,
 function _whyFail(r1,r2,cur){return [r1&&r1.error&&('승인처리: '+(r1.error.message||r1.error.code||'오류')),
   r2&&(r2.error?('직접수정: '+(r2.error.message||r2.error.code||'오류')):((!r2.data||!r2.data.length)?'직접수정: 권한이 없어 0건 변경됨':'')),
   cur?('서버 상태: '+cur.status):'서버에서 건을 찾을 수 없음'].filter(Boolean).join(' / ');}
-async function decideInvoice(id,status){
+async function _decideInvoice(id,status){
   const fin=()=>{closeModal();render();toast(status==='issued'?'발행완료로 표시했어요.':'반려했어요.',status==='rejected'?'err':'ok');};
   if(!IS_SUPA){const r=DB.invoice.find(x=>x.id===id);if(r){r.status=status;if(status==='issued')r.issuedAt=today();}fin();return;}
   const r1=await sb.rpc('fin_decide_invoice',{p_id:id,p_status:status,p_reason:''});
