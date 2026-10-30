@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261029a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261030a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -436,10 +436,9 @@ const POLICY_HTML='<div class="policy"><b>📌 이체·발행 정책 (꼭 확인
  +'<li>세금계산서(매입·매출)는 <b>당월분 → 익월 10일까지</b> 발행 가능, 이후 발행 불가(가산세)</li>'
  +'<li>발행 전 <b>공급가액·세액·합계금액</b> 한 번 더 확인</li>'
  +'<li><b>발행 주체 = 실 예금주</b> 동일 여부 확인 후 요청</li></ol></div>';
-/* ---------- 한시 안내 팝업 (이체 요청) ---------- */
-/* NOTICE_UNTIL 날짜까지만 '새 이체 요청' 전에 안내창을 띄움. 기간이 지나면 자동으로 안 뜸. */
-const NOTICE_UNTIL='2026-10-22';
-const NOTICE_BODY='<div class="policy" style="margin-bottom:0"><b>🧾 증빙 안내</b><div style="margin-top:7px;font-size:13.5px">· 퀵비, 운반비 = <b>간이영수증(종이영수증) 및 세금계산서 등 증빙 필수</b>입니다!<br>· 고객 환불비 = <b>증빙 필요 없음</b><br>· 그 외 = <b>모두 증빙 필요</b></div></div>';
+/* ---------- 증빙 안내 팝업 (이체 요청) ---------- */
+/* '새 이체 요청' 전에 항상 안내창을 띄움 (기한 없음). */
+const NOTICE_BODY='<div class="policy" style="margin-bottom:0"><b>🧾 증빙 안내</b><div style="margin-top:7px;font-size:13.5px">· 퀵비, 운반비 = <b>간이영수증(종이영수증) 및 세금계산서 등 증빙 필수</b>입니다!<br>· 고객 환불비, 반품 택배비 = <b>증빙 필요 없음</b><br>· 그 외 = <b>모두 증빙 필요</b></div></div>';
 let _noticeSeed=null;
 function openPayoutNotice(seed){
   _noticeSeed=seed||{};
@@ -1126,7 +1125,7 @@ function syncProofDate(v){const p=document.getElementById('f_proofdate');if(p&&v
 function openPayoutForm(seed){
   seed=seed||{};
   /* 신규 요청일 때만, 안내 기간 내라면 안내창을 먼저 보여줌 */
-  if(!seed.editId&&!seed._noticed&&today()<=NOTICE_UNTIL){openPayoutNotice(seed);return;}
+  if(!seed.editId&&!seed._noticed){openPayoutNotice(seed);return;}
   if(seed.bank)seed.bank=normBank(seed.bank);
   /* 적요 앞의 [희망 날짜] 태그를 분리해 날짜 칸에 채움 */
   let seedDue='';let seedPurpose=seed.purpose||'';
