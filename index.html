@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261030a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261102a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -793,7 +793,7 @@ function render(){
   if(current==='fuel')act=`<button class="btn btn-primary" onclick="openFuelForm()">${I.car}<span>유류비 신청</span></button>`;
   if(current==='expense')act=`<button class="btn btn-primary" onclick="openExpenseForm()">${I.plus}<span>지출결의 등록</span></button>`;
   if(current==='cardreport')act=`<button class="btn btn-line btn-sm" onclick="openCardBulkForm()">📥 일괄</button><button class="btn btn-primary" onclick="openCardForm()">${I.plus}<span>기명 법카 신고</span></button>`;
-  if(current==='invoice')act=`${canManageAll()?'<button class="btn btn-line" onclick="openInvFix()" title="발급일은 있는데 상태가 발행대기로 남은 건을 찾아 발행완료로 맞춰요.">🧹 상태 복구</button>':''}`+`${canDeposit()?`<button class="btn btn-line" onclick="openDepositImport()">📥<span>입금확인 가져오기</span></button>`:''}<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
+  if(current==='invoice')act=`${canApprove()?'<button class="btn btn-line" onclick="exportHometaxPending()" title="지금 화면의 발행대기 건을 홈택스 일괄발급 양식으로 내려받아요.">📤 홈택스 일괄발급</button>':''}`+`${canManageAll()?'<button class="btn btn-line" onclick="openInvFix()" title="발급일은 있는데 상태가 발행대기로 남은 건을 찾아 발행완료로 맞춰요.">🧹 상태 복구</button>':''}`+`${canDeposit()?`<button class="btn btn-line" onclick="openDepositImport()">📥<span>입금확인 가져오기</span></button>`:''}<button class="btn btn-primary" onclick="openInvoiceForm()">${I.plus}<span>새 발행 요청</span></button>`;
   if(current==='proof'&&canManageAll())act=`<button class="btn btn-primary" onclick="openLedgerCompare()">📒<span>매입 계산서 대조 (원장)</span></button>`;
   if(current==='vendors')act=`<button class="btn btn-line" onclick="exportVendors()">${I.download}<span>거래처 엑셀</span></button>`;
   if(current==='coupon')act=`${canApprove()?`<button class="btn btn-line btn-sm" onclick="openCouponCodeForm()">${I.plus}<span>코드 추가</span></button>`:''}<button class="btn btn-primary" onclick="openCouponForm()">${I.plus}<span>새 쿠폰 발급</span></button>`;
@@ -2525,11 +2525,88 @@ function batchDepositRun(){
 }
 function batchInvoice(status){const ss=DB.invoice.filter(r=>_sel.has(r.id)&&r.status==='requested');if(!ss.length){toast('선택한 항목 중 발행대기 건이 없어요.','err');return;}if(IS_SUPA){Promise.all(ss.map(r=>sb.rpc('fin_decide_invoice',{p_id:r.id,p_status:status,p_reason:''}))).then(()=>loadData()).then(()=>{_sel=new Set();render();toast(ss.length+'건 처리.','ok');}).catch(()=>toast('일부 처리 실패','err'));}else{ss.forEach(r=>{r.status='issued';});_sel=new Set();render();toast(ss.length+'건 처리.','ok');}}
 function exportInvoiceRows(ss,fname){loadXLSX().then(function(){const head=['요청일','요청자','소속팀','사업자등록번호(공급받는자)','상호','이메일(공급받는자)','계산서작성일','품목명','유형','공급가액','부가세액','세금계산서합계','실제입금액','내용','계산서발급일','상태','입금확인'];const data=ss.map(r=>{const dd=depData(r.id);return [r.applied,r.requester,normalizeTeam(r.team)||'',r.bizNo,r.company,r.email,r.writeDate,r.itemName,r.saleType,r.supply,r.tax,r.total,dd.amt||'',dd.note||'',r.issuedAt||'',(ISTATUS[r.status]||['?'])[0],dd.d||''];});const ws=XLSX.utils.aoa_to_sheet([head].concat(data));ws['!cols']=[{wch:11},{wch:8},{wch:9},{wch:16},{wch:20},{wch:24},{wch:11},{wch:26},{wch:6},{wch:12},{wch:11},{wch:13},{wch:12},{wch:26},{wch:11},{wch:9},{wch:11}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'세금계산서');XLSX.writeFile(wb,fname);toast(ss.length+'건 엑셀 다운로드.','ok');}).catch(()=>toast('엑셀 로드 실패','err'));}
-function exportInvoice(){const ss=DB.invoice.filter(r=>_sel.has(r.id));if(!ss.length){toast('항목을 선택하세요.','err');return;}exportInvoiceRows(ss,'세금계산서_선택_'+today()+'.xlsx');}
+function exportInvoice(){const ss=DB.invoice.filter(r=>_sel.has(r.id));if(!ss.length){toast('항목을 선택하세요.','err');return;}openHometaxExport(ss);}
 function exportInvoiceList(){const ss=applySort(visible(DB.invoice,'invoice'),'invoice');if(!ss.length){toast('내보낼 항목이 없어요.','err');return;}exportInvoiceRows(ss,'세금계산서발행_'+today()+'.xlsx');}
 function _fn(s){return String(s||'').replace(/[\\/:*?"<>|]/g,'').slice(0,20);}
 function exportPayoutOne(id){const r=DB.payout.find(x=>x.id===id);if(!r){toast('항목을 찾을 수 없어요.','err');return;}exportPayoutRows([r],'이체_'+_fn(r.payee)+'_'+today()+'.xlsx');}
-function exportInvoiceOne(id){const r=DB.invoice.find(x=>x.id===id);if(!r){toast('항목을 찾을 수 없어요.','err');return;}exportInvoiceRows([r],'세금계산서_'+_fn(r.company)+'_'+today()+'.xlsx');}
+function exportInvoiceOne(id){const r=DB.invoice.find(x=>x.id===id);if(!r){toast('항목을 찾을 수 없어요.','err');return;}openHometaxExport([r]);}
+/* ===================== 홈택스 전자세금계산서 일괄발급 양식 =====================
+   국세청 「세금계산서등록양식(일반)」 그대로: 6행까지 안내·제목, 7행부터 자료, 59열, 모든 칸 텍스트, 파일당 100건까지 */
+const HT_SUPPLIER={bizNo:'5818801277',name:'주식회사 빌리지베이비',ceo:'이정윤',addr:'서울특별시 영등포구 의사당대로 83, 17층(여의도동)',bizType:'',bizItem:'',email:'cy.j@villagebaby.kr'};
+const HT_INTRO=["엑셀 업로드 양식(전자세금계산서-일반(영세율)) - 100건 이하","○ 필수항목(주황색)은 반드시 입력하셔야 합니다.\n     > 아래 '항목설명' 및 '올바른 예시' 시트를 참고하여 작성하시기 바랍니다.","○ 임의로 양식을 변경[행 또는 열 추가 삭제 등]하는 경우 발급시 오류가 발생할 수 있으므로, 정해진 양식으로 작성하시기 바랍니다\n     > 실제 업로드할 DATA는 7행부터 입력하여야 하며, 최대 100건까지 입력이 가능합니다.(100건 초과 자료는 처리 안되며, 발급은 최대 50건씩 처리가능합니다)","     > 거래한 재화 또는 용역에 맞는 전자(세금)계산서 종류코드(01, 02)를 정확히 입력하셔야 합니다.\n     > 품목은 1건 이상 입력해야 합니다.\n     > 공급받는자 등록번호는 사업자등록번호, 주민등록번호를 입력할 수 있습니다. \n        외국인의 경우 공급받는자 등록번호(C열)에 '9999999999999'를 입력하시고, 비고란(N열)에  외국인등록번호 또는 여권번호를 입력하시기 바랍니다.\n     > 마지막 열(오른쪽 끝)의 '영수(01), 청구(02)'는 필수 항목이니 누락하지 마시기 바랍니다.(영수 : 대가를 받은 경우, 청구 : 대가를 아직 못 받은 경우)","○ 처음 사용자께서는 '올바른 예시' 시트에 있는 내용을 복사ᆞ붙여넣기 하신 후 내용을 수정하시면 오류 없이 쉽게 발급하실 수 있습니다.\n     > 오류발생시 '잘못된 예시' 시트에 있는 내용들을 참고하시면 대표적인 오류 원인을 확인할 수 있습니다. \n○ 발급가능한 파일 확장자는 XLS, XLSX 입니다.\n○ 일괄발급에 도움을 받고자 하시면 국세상담센터(국번없이 126번→ 1번 → 2번)로 문의주시기 바랍니다."];
+const HT_HEAD=["전자(세금)계산서 종류\n(01:일반, 02:영세율)","작성일자","공급자 등록번호\n(\"-\" 없이 입력)","공급자\n 종사업장번호","공급자 상호","공급자 성명","공급자 사업장주소","공급자 업태","공급자 종목","공급자 이메일","공급받는자 등록번호\n(\"-\" 없이 입력)","공급받는자 \n종사업장번호","공급받는자 상호 ","공급받는자 성명","공급받는자 사업장주소","공급받는자 업태","공급받는자 종목","공급받는자 이메일1","공급받는자 이메일2","공급가액\n합계","세액\n합계","비고","일자1\n(2자리, 작성년월 제외)","품목1","규격1","수량1","단가1","공급가액1","세액1","품목비고1","일자2\n(2자리, 작성년월 제외)","품목2","규격2","수량2","단가2","공급가액2","세액2","품목비고2","일자3\n(2자리, 작성년월 제외)","품목3","규격3","수량3","단가3","공급가액3","세액3","품목비고3","일자4\n(2자리, 작성년월 제외)","품목4","규격4","수량4","단가4","공급가액4","세액4","품목비고4","현금","수표","어음","외상미수금","영수(01),\n청구(02)"];
+const HT_COLW=[19,9,14,12,12,10,23,10,10,17,18,11,14,14,20,14,14,17,19,9,7,4,10,10,13,5,6,9,7,8,10,10,13,5,6,9,7,8,10,9,11,5,6,9,7,8,10,9,11,5,6,9,7,8,8,7,8,9,8];
+const HT_ROWH=[31,42,45,96,85,46];
+const HT_MAX=100;
+let _HT=null;
+function _htBytes(s){let n=0;for(const ch of String(s||''))n+=ch.charCodeAt(0)>127?2:1;return n;}
+function _htClip(s,max){let out='',n=0;for(const ch of String(s||'').trim()){const w=ch.charCodeAt(0)>127?2:1;if(n+w>max)break;out+=ch;n+=w;}return out;}
+function _htSkipReason(r){
+  if(r.status!=='requested')return '발행대기가 아닌 건';
+  const t=r.saleType||'매출';
+  if(t!=='매출'&&t!=='영세')return '구분이 매입·비과세인 건';
+  if(!(Number(r.supply)>0))return '공급가액이 0 이하인 건 (수정발행은 홈택스에서 따로)';
+  if(t==='영세'&&Number(r.tax)!==0)return '영세인데 세액이 있는 건';
+  const b=digits(r.bizNo);
+  if(b.length!==10&&b.length!==13)return '사업자번호가 10·13자리가 아닌 건';
+  const blank=v=>{const x=String(v||'').trim();return !x||x==='-';};
+  if(blank(r.company)||blank(r.ceo)||blank(r.itemName))return '상호·대표자·품목이 비어 있는 건';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(r.writeDate||'')))return '작성일이 없는 건';
+  return '';
+}
+function _htRow(r){
+  const S=HT_SUPPLIER,w=String(r.writeDate),sup=String(Math.round(Number(r.supply))),tax=String(Math.round(Number(r.tax)||0));
+  const mail=/@/.test(r.email||'')?_htClip(r.email,40):'';
+  const row=new Array(HT_HEAD.length).fill('');
+  row[0]=(r.saleType==='영세')?'02':'01';
+  row[1]=w.replace(/-/g,'');
+  row[2]=S.bizNo;row[4]=S.name;row[5]=S.ceo;row[6]=S.addr;row[7]=S.bizType;row[8]=S.bizItem;row[9]=S.email;
+  row[10]=digits(r.bizNo);row[12]=_htClip(r.company,70);row[13]=_htClip(r.ceo,30);row[14]=_htClip(r.addr,150);row[15]=_htClip(r.bizType,40);row[16]=_htClip(r.bizItem,60);row[17]=mail;
+  row[19]=sup;row[20]=tax;
+  row[22]=w.slice(8,10);row[23]=_htClip(r.itemName,100);row[27]=sup;row[28]=tax;
+  row[58]=depData(r.id).d?'01':'02'; /* 입금확인된 건은 영수, 아니면 청구 */
+  return row;
+}
+function _htSheet(list){
+  const aoa=HT_INTRO.map(t=>[t]).concat([HT_HEAD],list.map(_htRow));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}}].concat([1,2,3,4].map(n=>({s:{r:n,c:0},e:{r:n,c:11}})));
+  ws['!cols']=HT_COLW.map(w=>({wch:w}));
+  ws['!rows']=HT_ROWH.map(h=>({hpt:h}));
+  list.forEach((_,i)=>HT_HEAD.forEach((__,c)=>{const cell=ws[XLSX.utils.encode_cell({r:6+i,c})];if(cell)cell.z='@';}));
+  return ws;
+}
+function openHometaxExport(ss){
+  const skips={};let ok=[];
+  ss.forEach(r=>{const why=_htSkipReason(r);if(why)skips[why]=(skips[why]||0)+1;else ok.push(r);});
+  if(!ok.length){const k=Object.keys(skips)[0];toast(k?('파일에 넣을 건이 없어요: '+k):'파일에 넣을 건이 없어요.','err');return;}
+  const over=Math.max(0,ok.length-HT_MAX);
+  if(over)ok=ok.slice(0,HT_MAX);
+  _HT=ok;
+  const clipped=ok.filter(r=>_htBytes(r.itemName)>100||_htBytes(r.company)>70||_htBytes(r.addr)>150).length;
+  const noMail=ok.filter(r=>!/@/.test(r.email||'')).length;
+  const prev=ok.slice(0,10).map(r=>'<tr><td style="text-align:left">'+escH(r.company)+'</td><td class="num">'+escH(digits(r.bizNo))+'</td><td class="num">'+escH(fmtD(r.writeDate))+'</td><td style="text-align:left">'+escH(r.itemName)+'</td><td class="num" style="text-align:right">'+won(r.supply)+'</td><td class="num" style="text-align:right">'+won(r.tax)+'</td></tr>').join('');
+  const sum=(k)=>ok.reduce((a,r)=>a+(Number(r[k])||0),0);
+  modal('홈택스 일괄발급 파일','wide',
+    '<div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">'+ok.length+'건 · 공급가액 '+won(sum('supply'))+'원 · 세액 '+won(sum('tax'))+'원</b><br>국세청 일괄발급 양식(세금계산서등록양식 일반)으로 내려받아요. 홈택스 일괄발급 화면에 그대로 올리면 됩니다.</div>'
+    +'<div class="tbl-wrap" style="max-height:260px;overflow:auto;margin-top:10px"><table class="tbl"><thead><tr><th>상호</th><th>사업자번호</th><th>작성일</th><th>품목</th><th>공급가액</th><th>세액</th></tr></thead><tbody>'+prev+'</tbody></table></div>'
+    +'<div class="t-sub" style="margin-top:9px;line-height:1.75">'+(ok.length>10?'· 위는 앞 10건 미리보기예요 (파일에는 '+ok.length+'건 전부 들어갑니다).<br>':'')
+    +Object.keys(skips).map(k=>'· <b>'+escH(k)+' '+skips[k]+'건은 제외</b>했어요.<br>').join('')
+    +(over?'· <b>양식 한도가 파일당 100건이라 '+over+'건은 이번 파일에서 빠졌어요.</b> 발행완료 표시 후 다시 내려받으세요.<br>':'')
+    +(clipped?'· 글자 수 한도를 넘는 '+clipped+'건은 양식 한도에 맞춰 잘랐어요.<br>':'')
+    +(noMail?'· 받는 곳 이메일이 없는 '+noMail+'건은 이메일 칸을 비웠어요.<br>':'')
+    +'· 입금확인된 건은 <b>영수</b>, 나머지는 <b>청구</b>로 들어가요. 공급자 업태·종목은 비어 있어요.<br>· 내려받아도 상태는 그대로예요. 홈택스 발급 뒤 <b>발행완료 표시</b>를 눌러주세요.</div>',
+    '<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="_htWrite()">파일 내려받기</button>');
+}
+function _htWrite(){
+  const list=_HT;if(!list||!list.length)return;
+  loadXLSX().then(function(){
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,_htSheet(list),'엑셀업로드양식');
+    XLSX.writeFile(wb,'세금계산서등록양식_'+today()+'_'+list.length+'건.xlsx'); /* xls(biff8)는 긴 안내문을 255자에서 잘라서 xlsx로 저장 — 양식이 XLS·XLSX 모두 허용 */
+    closeModal();toast(list.length+'건 홈택스 일괄발급 파일을 내려받았어요.','ok');
+  }).catch(()=>toast('엑셀 로드 실패','err'));
+}
+function exportHometaxPending(){const ss=applySort(visible(DB.invoice,'invoice'),'invoice').filter(r=>r.status==='requested');if(!ss.length){toast('지금 화면에 발행대기 건이 없어요.','err');return;}openHometaxExport(ss);}
 /* ===================== 거래처 관리 ===================== */
 /* 신규 거래처 승인 대기 = 이체엔 썼지만 아직 거래처 마스터에 없는 입금처 */
 function pendingNewVendors(){
