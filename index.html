@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261102a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261102b'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -2531,12 +2531,9 @@ function _fn(s){return String(s||'').replace(/[\\/:*?"<>|]/g,'').slice(0,20);}
 function exportPayoutOne(id){const r=DB.payout.find(x=>x.id===id);if(!r){toast('항목을 찾을 수 없어요.','err');return;}exportPayoutRows([r],'이체_'+_fn(r.payee)+'_'+today()+'.xlsx');}
 function exportInvoiceOne(id){const r=DB.invoice.find(x=>x.id===id);if(!r){toast('항목을 찾을 수 없어요.','err');return;}openHometaxExport([r]);}
 /* ===================== 홈택스 전자세금계산서 일괄발급 양식 =====================
-   국세청 「세금계산서등록양식(일반)」 그대로: 6행까지 안내·제목, 7행부터 자료, 59열, 모든 칸 텍스트, 파일당 100건까지 */
+   국세청 「세금계산서등록양식(일반)」 원본(hometax_invoice_template.xlsx)에 7행부터 자료만 채움 — 색·시트·보호 그대로, 파일당 100건까지 */
 const HT_SUPPLIER={bizNo:'5818801277',name:'주식회사 빌리지베이비',ceo:'이정윤',addr:'서울특별시 영등포구 의사당대로 83, 17층(여의도동)',bizType:'',bizItem:'',email:'cy.j@villagebaby.kr'};
-const HT_INTRO=["엑셀 업로드 양식(전자세금계산서-일반(영세율)) - 100건 이하","○ 필수항목(주황색)은 반드시 입력하셔야 합니다.\n     > 아래 '항목설명' 및 '올바른 예시' 시트를 참고하여 작성하시기 바랍니다.","○ 임의로 양식을 변경[행 또는 열 추가 삭제 등]하는 경우 발급시 오류가 발생할 수 있으므로, 정해진 양식으로 작성하시기 바랍니다\n     > 실제 업로드할 DATA는 7행부터 입력하여야 하며, 최대 100건까지 입력이 가능합니다.(100건 초과 자료는 처리 안되며, 발급은 최대 50건씩 처리가능합니다)","     > 거래한 재화 또는 용역에 맞는 전자(세금)계산서 종류코드(01, 02)를 정확히 입력하셔야 합니다.\n     > 품목은 1건 이상 입력해야 합니다.\n     > 공급받는자 등록번호는 사업자등록번호, 주민등록번호를 입력할 수 있습니다. \n        외국인의 경우 공급받는자 등록번호(C열)에 '9999999999999'를 입력하시고, 비고란(N열)에  외국인등록번호 또는 여권번호를 입력하시기 바랍니다.\n     > 마지막 열(오른쪽 끝)의 '영수(01), 청구(02)'는 필수 항목이니 누락하지 마시기 바랍니다.(영수 : 대가를 받은 경우, 청구 : 대가를 아직 못 받은 경우)","○ 처음 사용자께서는 '올바른 예시' 시트에 있는 내용을 복사ᆞ붙여넣기 하신 후 내용을 수정하시면 오류 없이 쉽게 발급하실 수 있습니다.\n     > 오류발생시 '잘못된 예시' 시트에 있는 내용들을 참고하시면 대표적인 오류 원인을 확인할 수 있습니다. \n○ 발급가능한 파일 확장자는 XLS, XLSX 입니다.\n○ 일괄발급에 도움을 받고자 하시면 국세상담센터(국번없이 126번→ 1번 → 2번)로 문의주시기 바랍니다."];
-const HT_HEAD=["전자(세금)계산서 종류\n(01:일반, 02:영세율)","작성일자","공급자 등록번호\n(\"-\" 없이 입력)","공급자\n 종사업장번호","공급자 상호","공급자 성명","공급자 사업장주소","공급자 업태","공급자 종목","공급자 이메일","공급받는자 등록번호\n(\"-\" 없이 입력)","공급받는자 \n종사업장번호","공급받는자 상호 ","공급받는자 성명","공급받는자 사업장주소","공급받는자 업태","공급받는자 종목","공급받는자 이메일1","공급받는자 이메일2","공급가액\n합계","세액\n합계","비고","일자1\n(2자리, 작성년월 제외)","품목1","규격1","수량1","단가1","공급가액1","세액1","품목비고1","일자2\n(2자리, 작성년월 제외)","품목2","규격2","수량2","단가2","공급가액2","세액2","품목비고2","일자3\n(2자리, 작성년월 제외)","품목3","규격3","수량3","단가3","공급가액3","세액3","품목비고3","일자4\n(2자리, 작성년월 제외)","품목4","규격4","수량4","단가4","공급가액4","세액4","품목비고4","현금","수표","어음","외상미수금","영수(01),\n청구(02)"];
-const HT_COLW=[19,9,14,12,12,10,23,10,10,17,18,11,14,14,20,14,14,17,19,9,7,4,10,10,13,5,6,9,7,8,10,10,13,5,6,9,7,8,10,9,11,5,6,9,7,8,10,9,11,5,6,9,7,8,8,7,8,9,8];
-const HT_ROWH=[31,42,45,96,85,46];
+const HT_COLS=59;
 const HT_MAX=100;
 let _HT=null;
 function _htBytes(s){let n=0;for(const ch of String(s||''))n+=ch.charCodeAt(0)>127?2:1;return n;}
@@ -2557,7 +2554,7 @@ function _htSkipReason(r){
 function _htRow(r){
   const S=HT_SUPPLIER,w=String(r.writeDate),sup=String(Math.round(Number(r.supply))),tax=String(Math.round(Number(r.tax)||0));
   const mail=/@/.test(r.email||'')?_htClip(r.email,40):'';
-  const row=new Array(HT_HEAD.length).fill('');
+  const row=new Array(HT_COLS).fill('');
   row[0]=(r.saleType==='영세')?'02':'01';
   row[1]=w.replace(/-/g,'');
   row[2]=S.bizNo;row[4]=S.name;row[5]=S.ceo;row[6]=S.addr;row[7]=S.bizType;row[8]=S.bizItem;row[9]=S.email;
@@ -2567,14 +2564,27 @@ function _htRow(r){
   row[58]=depData(r.id).d?'01':'02'; /* 입금확인된 건은 영수, 아니면 청구 */
   return row;
 }
-function _htSheet(list){
-  const aoa=HT_INTRO.map(t=>[t]).concat([HT_HEAD],list.map(_htRow));
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}}].concat([1,2,3,4].map(n=>({s:{r:n,c:0},e:{r:n,c:11}})));
-  ws['!cols']=HT_COLW.map(w=>({wch:w}));
-  ws['!rows']=HT_ROWH.map(h=>({hpt:h}));
-  list.forEach((_,i)=>HT_HEAD.forEach((__,c)=>{const cell=ws[XLSX.utils.encode_cell({r:6+i,c})];if(cell)cell.z='@';}));
-  return ws;
+function _htCol(i){let n=i+1,c='';while(n){const m=(n-1)%26;c=String.fromCharCode(65+m)+c;n=(n-m-1)/26;}return c;}
+function _htXml(v){return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+/* 양식의 빈 칸(서식 유지)에 공유 문자열로 값을 넣음 */
+function _htFill(sheet,sst,list){
+  const m=sst.match(/<sst [^>]*uniqueCount="(\d+)"/);if(!m)throw new Error('양식 문자열표 없음');
+  let idx=Number(m[1]),added=0,extra='';
+  list.forEach((r,i)=>{const n=7+i;_htRow(r).forEach((v,c)=>{if(v==='')return;
+    const ref=_htCol(c)+n;const re=new RegExp('<c r="'+ref+'"( s="\\d+")?/>');
+    if(!re.test(sheet))throw new Error('양식 칸 없음 '+ref);
+    sheet=sheet.replace(re,(_,st)=>'<c r="'+ref+'"'+(st||'')+' t="s"><v>'+idx+'</v></c>');
+    extra+='<si><t xml:space="preserve">'+_htXml(v)+'</t></si>';idx++;added++;});});
+  sst=sst.replace(/uniqueCount="\d+"/,'uniqueCount="'+idx+'"').replace(/(<sst [^>]*?\bcount=")(\d+)"/,(_,a,b)=>a+(Number(b)+added)+'"').replace('</sst>',extra+'</sst>');
+  return {sheet,sst};
+}
+let _jszipP=null;
+function loadJSZip(){if(window.JSZip)return Promise.resolve();if(_jszipP)return _jszipP;_jszipP=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});return _jszipP;}
+async function _htBuild(list,buf){
+  const zip=await JSZip.loadAsync(buf);
+  const out=_htFill(await zip.file('xl/worksheets/sheet1.xml').async('string'),await zip.file('xl/sharedStrings.xml').async('string'),list);
+  zip.file('xl/worksheets/sheet1.xml',out.sheet);zip.file('xl/sharedStrings.xml',out.sst);
+  return zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 function openHometaxExport(ss){
   const skips={};let ok=[];
@@ -2598,13 +2608,15 @@ function openHometaxExport(ss){
     +'· 입금확인된 건은 <b>영수</b>, 나머지는 <b>청구</b>로 들어가요. 공급자 업태·종목은 비어 있어요.<br>· 내려받아도 상태는 그대로예요. 홈택스 발급 뒤 <b>발행완료 표시</b>를 눌러주세요.</div>',
     '<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="_htWrite()">파일 내려받기</button>');
 }
-function _htWrite(){
+async function _htWrite(){
   const list=_HT;if(!list||!list.length)return;
-  loadXLSX().then(function(){
-    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,_htSheet(list),'엑셀업로드양식');
-    XLSX.writeFile(wb,'세금계산서등록양식_'+today()+'_'+list.length+'건.xlsx'); /* xls(biff8)는 긴 안내문을 255자에서 잘라서 xlsx로 저장 — 양식이 XLS·XLSX 모두 허용 */
+  try{
+    await loadJSZip();
+    const res=await fetch('hometax_invoice_template.xlsx?v='+APP_VERSION);if(!res.ok)throw new Error('양식 파일을 못 불러왔어요');
+    const blob=await _htBuild(list,await res.arrayBuffer());
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='세금계산서등록양식_'+today()+'_'+list.length+'건.xlsx';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
     closeModal();toast(list.length+'건 홈택스 일괄발급 파일을 내려받았어요.','ok');
-  }).catch(()=>toast('엑셀 로드 실패','err'));
+  }catch(e){toast('파일 만들기 실패: '+((e&&e.message)||'다시 시도해 주세요'),'err');}
 }
 function exportHometaxPending(){const ss=applySort(visible(DB.invoice,'invoice'),'invoice').filter(r=>r.status==='requested');if(!ss.length){toast('지금 화면에 발행대기 건이 없어요.','err');return;}openHometaxExport(ss);}
 /* ===================== 거래처 관리 ===================== */
