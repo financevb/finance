@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261102d'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261102e'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -2041,10 +2041,11 @@ function openInvoiceForm(seed){
   seed=seed||{};const types=['매출','매입','영세','비과세'].map(x=>`<option ${seed.saleType===x?'selected':''}>${x}</option>`).join('');
   _editInvoiceId=seed.editId||null;
   modal(seed.editId?'세금계산서 발행 요청 수정':'새 세금계산서 발행 요청','wide',POLICY_HTML+`
-    <div class="f2"><div class="form-row"><label>상호 <span class="req">*</span></label><input class="input" id="i_company" value="${escH(seed.company||'')}" placeholder="(주)베스트마트" list="vlist2" oninput="onInvPick()"><datalist id="vlist2">${VENDORS.filter(v=>v.bizNo).map(v=>`<option value="${escH(v.name)}">`).join('')}</datalist></div><div class="form-row"><label>사업자등록번호 <span class="req">*</span></label><input class="input num" id="i_bizno" value="${escH(seed.bizNo||'')}" placeholder="10자리"></div></div>
+    <div class="f2"><div class="form-row"><label>상호 <span class="req">*</span></label><input class="input" id="i_company" value="${escH(seed.company||'')}" placeholder="(주)베스트마트" list="vlist2" oninput="onInvPick()"><datalist id="vlist2">${_invCompanyNames().map(n=>`<option value="${escH(n)}">`).join('')}</datalist></div><div class="form-row"><label>사업자등록번호 <span class="req">*</span></label><input class="input num" id="i_bizno" value="${escH(seed.bizNo||'')}" placeholder="10자리" oninput="onInvBizPick()"></div></div>
     <div class="f2"><div class="form-row"><label>대표자 <span class="req">*</span></label><input class="input" id="i_ceo" value="${escH(seed.ceo||'')}"></div><div class="form-row"><label>이메일 <span class="req">*</span></label><input class="input" id="i_email" value="${escH(seed.email||'')}" placeholder="tax@company.kr"></div></div>
     <div class="form-row"><label>사업장 주소 <span class="req">*</span></label><input class="input" id="i_addr" value="${escH(seed.addr||'')}" placeholder="서울특별시 종로구 ..."></div>
     <div class="f2"><div class="form-row"><label>업태 <span class="req">*</span></label><input class="input" id="i_bt" value="${escH(seed.bizType||'')}" placeholder="예: 금융"></div><div class="form-row"><label>종목 <span class="req">*</span></label><input class="input" id="i_bi" value="${escH(seed.bizItem||'')}" placeholder="예: 여신전문업"></div></div>
+    <div class="t-sub" id="i_autohint" style="margin:-4px 0 10px;display:none"></div>
     <div class="f2"><div class="form-row"><label>구분</label><select class="input" id="i_type">${types}</select></div><div class="form-row"><label>작성일자 <span class="req">*</span><span class="hint">매입=이체당일</span></label><input class="input" type="date" id="i_date" value="${seed.writeDate||today()}" onchange="invDeadlineHint()"></div></div>
     <div class="form-row"><label>품목명 <span class="req">*</span></label><input class="input" id="i_item" value="${escH(seed.itemName||'')}"></div>
     <div class="f2"><div class="form-row"><label>공급가액 <span class="req">*</span></label><input class="input num" id="i_supply" value="${seed.supply?won(seed.supply):''}" placeholder="0" oninput="this.value=comma(this.value);invVat()"></div><div class="form-row"><label>세액<span class="hint">자동 10% · 직접 수정 가능</span></label><input class="input num" id="i_vat" placeholder="0" oninput="this.value=comma(this.value);this.dataset.manual='1';invVat()"></div></div>
@@ -2055,12 +2056,41 @@ function openInvoiceForm(seed){
   invVat();
   /* 수정 모드에서 세액이 자동값(10%)과 다르면 수기값으로 유지 */
   if(seed.tax!==undefined&&seed.tax!==null&&seed.tax!==''){const auto=Math.round((seed.supply||0)*0.1);if(Number(seed.tax)!==auto){const v=document.getElementById('i_vat');if(v){v.dataset.manual='1';v.value=won(seed.tax);invVat();}}}
+  if(seed.company||seed.bizNo)_invAutofill(seed.company||'',digits(seed.bizNo),false);
   invDeadlineHint();
 }
-function onInvPick(){const name=val('i_company');const v=VENDORS.find(x=>x.name===name);if(v){document.getElementById('i_bizno').value=v.bizNo||'';document.getElementById('i_email').value=v.email||'';}
-  /* 같은 상호의 최근 요청에서 대표자·주소·업태·종목 자동 채움 (빈 칸만) */
-  const prev=(DB.invoice||[]).find(x=>x.company===name&&(x.ceo||x.email||x.addr||x.bizType||x.bizItem));
-  if(prev){const fill=(id,vv)=>{const el=document.getElementById(id);if(el&&!el.value&&vv)el.value=vv;};fill('i_bizno',prev.bizNo);fill('i_ceo',prev.ceo);fill('i_email',prev.email);fill('i_addr',prev.addr);fill('i_bt',prev.bizType);fill('i_bi',prev.bizItem);}}
+/* 한 번 등록한 업체는 최근 요청 기준으로 자동 입력 — 항목마다 가장 최근의 실제 값, 직접 고친 칸은 유지 */
+const INV_AUTO_FIELDS=[['i_bizno','bizNo'],['i_company','company'],['i_ceo','ceo'],['i_email','email'],['i_addr','addr'],['i_bt','bizType'],['i_bi','bizItem']];
+function _invNorm(s){return String(s||'').replace(/\(주\)|㈜|주식회사|\s/g,'').toLowerCase();}
+function _invFilled(v){return !/^[-–—_.\s]*$/.test(String(v||''));}
+function _invCompanyNames(){const seen=new Set(),out=[];const add=n=>{const k=_invNorm(n);if(k&&!seen.has(k)){seen.add(k);out.push(n);}};(DB.invoice||[]).filter(x=>x.status!=='rejected').forEach(x=>add(x.company));VENDORS.filter(v=>v.bizNo).forEach(v=>add(v.name));return out;}
+function _invRecent(name,bizNo){
+  const rows=(DB.invoice||[]).filter(x=>x.status!=='rejected');
+  let hits=[];
+  if(bizNo.length===10)hits=rows.filter(x=>digits(x.bizNo)===bizNo);
+  if(!hits.length&&_invNorm(name)){const k=_invNorm(name);hits=rows.filter(x=>_invNorm(x.company)===k);}
+  if(!hits.length)return null;
+  const biz=digits(hits[0].bizNo);if(biz)hits=hits.filter(x=>digits(x.bizNo)===biz); /* 같은 이름의 다른 사업자와 섞이지 않게 */
+  const pick={applied:hits[0].applied||''};
+  INV_AUTO_FIELDS.forEach(([,k])=>{const h=hits.find(x=>_invFilled(x[k]));if(h)pick[k]=String(h[k]).trim();});
+  return pick;
+}
+function _invAutofill(name,bizNo,clearStale){
+  const rec=_invRecent(name,bizNo);const v=VENDORS.find(x=>x.name===name||(bizNo&&digits(x.bizNo)===bizNo));
+  const data=Object.assign({},v?{bizNo:v.bizNo||'',email:v.email||''}:{},rec||{});
+  let n=0;
+  INV_AUTO_FIELDS.forEach(([id,k])=>{const el=document.getElementById(id);if(!el)return;
+    const open=!_invFilled(el.value)||el.dataset.auto==='1';
+    if(!open)return;
+    const vv=_invFilled(data[k])?data[k]:'';
+    if(vv){if(el.value!==vv)n++;el.value=vv;if(el.dataset.auto!=='1'){el.dataset.auto='1';el.addEventListener('input',()=>{delete el.dataset.auto;},{once:true});}}
+    else if(clearStale&&el.dataset.auto==='1'&&document.activeElement!==el){el.value='';delete el.dataset.auto;}
+  });
+  const hint=document.getElementById('i_autohint');
+  if(hint){const on=!!rec&&(n>0||hint.style.display!=='none');hint.style.display=on?'':'none';hint.textContent=on?'🔁 최근 발행 요청'+(rec.applied?'('+fmtD(rec.applied)+')':'')+' 정보로 자동 입력했어요. 달라졌다면 고쳐 주세요.':'';}
+}
+function onInvPick(){_invAutofill(val('i_company'),'',true);}
+function onInvBizPick(){const b=digits(val('i_bizno'));if(b.length===10)_invAutofill(val('i_company'),b,false);}
 function invVat(){const s=numVal('i_supply');
   const vEl=document.getElementById('i_vat');
   if(vEl&&!vEl.dataset.manual)vEl.value=s?comma(String(Math.round(s*0.1))):'';
