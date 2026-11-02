@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261102c'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261102d'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -2043,8 +2043,8 @@ function openInvoiceForm(seed){
   modal(seed.editId?'세금계산서 발행 요청 수정':'새 세금계산서 발행 요청','wide',POLICY_HTML+`
     <div class="f2"><div class="form-row"><label>상호 <span class="req">*</span></label><input class="input" id="i_company" value="${escH(seed.company||'')}" placeholder="(주)베스트마트" list="vlist2" oninput="onInvPick()"><datalist id="vlist2">${VENDORS.filter(v=>v.bizNo).map(v=>`<option value="${escH(v.name)}">`).join('')}</datalist></div><div class="form-row"><label>사업자등록번호 <span class="req">*</span></label><input class="input num" id="i_bizno" value="${escH(seed.bizNo||'')}" placeholder="10자리"></div></div>
     <div class="f2"><div class="form-row"><label>대표자 <span class="req">*</span></label><input class="input" id="i_ceo" value="${escH(seed.ceo||'')}"></div><div class="form-row"><label>이메일 <span class="req">*</span></label><input class="input" id="i_email" value="${escH(seed.email||'')}" placeholder="tax@company.kr"></div></div>
-    <div class="form-row"><label>사업장 주소<span class="hint">세금계산서 발행 시 필요 · 선택</span></label><input class="input" id="i_addr" value="${escH(seed.addr||'')}" placeholder="서울특별시 종로구 ..."></div>
-    <div class="f2"><div class="form-row"><label>업태<span class="hint">선택</span></label><input class="input" id="i_bt" value="${escH(seed.bizType||'')}" placeholder="예: 금융"></div><div class="form-row"><label>종목<span class="hint">선택</span></label><input class="input" id="i_bi" value="${escH(seed.bizItem||'')}" placeholder="예: 여신전문업"></div></div>
+    <div class="form-row"><label>사업장 주소 <span class="req">*</span></label><input class="input" id="i_addr" value="${escH(seed.addr||'')}" placeholder="서울특별시 종로구 ..."></div>
+    <div class="f2"><div class="form-row"><label>업태 <span class="req">*</span></label><input class="input" id="i_bt" value="${escH(seed.bizType||'')}" placeholder="예: 금융"></div><div class="form-row"><label>종목 <span class="req">*</span></label><input class="input" id="i_bi" value="${escH(seed.bizItem||'')}" placeholder="예: 여신전문업"></div></div>
     <div class="f2"><div class="form-row"><label>구분</label><select class="input" id="i_type">${types}</select></div><div class="form-row"><label>작성일자 <span class="req">*</span><span class="hint">매입=이체당일</span></label><input class="input" type="date" id="i_date" value="${seed.writeDate||today()}" onchange="invDeadlineHint()"></div></div>
     <div class="form-row"><label>품목명 <span class="req">*</span></label><input class="input" id="i_item" value="${escH(seed.itemName||'')}"></div>
     <div class="f2"><div class="form-row"><label>공급가액 <span class="req">*</span></label><input class="input num" id="i_supply" value="${seed.supply?won(seed.supply):''}" placeholder="0" oninput="this.value=comma(this.value);invVat()"></div><div class="form-row"><label>세액<span class="hint">자동 10% · 직접 수정 가능</span></label><input class="input num" id="i_vat" placeholder="0" oninput="this.value=comma(this.value);this.dataset.manual='1';invVat()"></div></div>
@@ -2067,8 +2067,18 @@ function invVat(){const s=numVal('i_supply');
   const t=vEl?numVal('i_vat'):Math.round(s*0.1);
   const e=document.getElementById('pv_s');if(!e)return;e.textContent=won(s);document.getElementById('pv_t').textContent=won(t);document.getElementById('pv_tot').textContent=won(s+t);}
 function invDeadlineHint(){const el=document.getElementById('i_dl');if(!el)return;const b=deadlineBadge(val('i_date'));el.innerHTML=b?'<div>'+b+' <span class="t-sub">— 작성일 기준 익월 10일까지 발행</span></div>':'';}
+/* 발행 요청 필수 항목 — 비어 있거나 '-' 같은 자리채움 값이면 등록 불가 */
+const INV_REQUIRED=[['i_company','상호'],['i_bizno','사업자등록번호'],['i_ceo','대표자'],['i_email','이메일'],['i_addr','사업장 주소'],['i_bt','업태'],['i_bi','종목'],['i_date','작성일자'],['i_item','품목명'],['i_supply','공급가액']];
+function _invRequiredOk(r){
+  const miss=INV_REQUIRED.filter(([id])=>{const el=document.getElementById(id);if(el)el.style.borderColor='';const v=String(val(id)||'').trim();return id==='i_supply'?!r.supply:/^[-–—_.\s]*$/.test(v);});
+  miss.forEach(([id])=>{document.getElementById(id).style.borderColor='#e5484d';});
+  if(miss.length){document.getElementById(miss[0][0]).focus();toast('아직 안 채운 항목: '+miss.map(x=>x[1]).join(', '),'err');return false;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim())){const el=document.getElementById('i_email');el.style.borderColor='#e5484d';el.focus();toast('이메일 형식을 확인해 주세요.','err');return false;}
+  return true;
+}
 function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat');const r={id:uid('v'),requester:ME().name,team:ME().team,saleType:val('i_type'),company:val('i_company'),bizNo:digits(val('i_bizno')),ceo:val('i_ceo'),email:val('i_email'),writeDate:val('i_date'),itemName:val('i_item'),supply,tax:vat,total:supply+vat,evidence:val('i_evidence'),addr:(val('i_addr')||'').trim(),bizType:(val('i_bt')||'').trim(),bizItem:(val('i_bi')||'').trim(),status:'requested',applied:today()};
-  if(!r.company||!r.bizNo||!r.ceo||!r.email||!r.itemName||!r.supply){toast('필수 항목을 채워주세요.','err');return;}
+  if(!_invRequiredOk(r))return;
+  if(r.saleType==='영세'&&r.tax!==0){toast('영세는 세액이 0원이어야 해요. 세액을 0으로 고쳐주세요.','err');return;}
   if(r.bizNo.length!==10){toast('사업자등록번호는 10자리예요.','err');return;}
   if(isLockedMonth(r.writeDate)){toast(r.writeDate.slice(0,7)+'은 마감되어 발행할 수 없어요.','err');return;}
   const dl=invoiceDeadline(r.writeDate);
