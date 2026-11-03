@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261104a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261104b'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1343,7 +1343,31 @@ function proofDetailHtml(r){
   }
   return `<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧾 증빙</div>${body}`;
 }
-function markProof(id,received){return _guard('pr'+id,received?'수취완료 처리 중…':'되돌리는 중…',()=>_markProof(id,received));}
+/* 수취완료: 수취일을 골라 함께 기록. 되돌리기는 바로 처리 */
+function markProof(id,received){
+  if(!received)return _guard('pr'+id,'되돌리는 중…',()=>_markProof(id,false));
+  const r=DB.payout.find(x=>x.id===id);if(!r)return;
+  modal('🧾 증빙 수취완료','',`<div class="dl"><dt>거래처</dt><dd>${escH(r.payee)}</dd><dt>금액</dt><dd><b>${won(r.amount)} ${escH(r.unit)}</b></dd><dt>작성일자</dt><dd class="num">${escH(fmtD(r.proofDate)||'-')}</dd></div>
+    <div class="form-row" style="margin-top:14px"><label>수취일 <span class="req">*</span><span class="hint">증빙을 실제로 받은 날</span></label><input class="input" type="date" id="pr_date" value="${today()}" max="${today()}"></div>`,
+    `<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="saveProofReceived('${id}')">수취완료</button>`);
+}
+function saveProofReceived(id){
+  const d=val('pr_date');
+  if(!d){toast('수취일을 선택해 주세요.','err');return;}
+  if(d>today()){toast('수취일은 오늘 이후로 고를 수 없어요.','err');return;}
+  return _guard('pr'+id,'수취완료 처리 중…',()=>_saveProofReceived(id,d));
+}
+async function _saveProofReceived(id,d){
+  const r=DB.payout.find(x=>x.id===id);
+  if(IS_SUPA){
+    const {error}=await sb.rpc('fin_mark_proof',{p_id:id,p_received:true});
+    if(error){toast(error.message||'오류가 났어요','err');return;}
+    const {data,error:e2}=await sb.from('fin_payouts').update({proof_received_at:d}).eq('id',id).select('id');
+    await loadData();
+    if(e2||!data||!data.length){closeModal();render();toast('수취완료는 됐지만 수취일 저장에 실패했어요 — 정채영님께 알려주세요.','err');return;}
+  }else if(r){r.proofStatus='수취완료';r.proofReceivedAt=d;}
+  closeModal();render();toast('수취완료로 표시했어요. ('+d+')','ok');
+}
 function _markProof(id,received){return sv('fin_mark_proof',{p_id:id,p_received:!!received},()=>{const r=DB.payout.find(x=>x.id===id);if(r){r.proofStatus=received?'수취완료':'받을예정';r.proofReceivedAt=received?today():'';}}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();render();toast(received?'증빙 수취완료로 표시했어요.':'받을예정으로 되돌렸어요.','ok');});}
 /* 관리자 메모(기록) — 관리자만 보고/작성 */
 function memoHtml(r){
