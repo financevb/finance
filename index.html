@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261103a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261104a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -470,6 +470,7 @@ const isBig=r=>!!(r&&r.unit==='원'&&(Number(r.amount)||0)>=THRESHOLD);
 const TEAMS_ALL=['Brand','Product','Commerce','M&E','Biz','GA'];
 /* 적격증빙 — 미수취 시 증빙불비 가산세(2%). 이체요청 시 필수 기재. */
 const PROOF_TYPES=[['세금계산서','세금계산서 (매입)'],['현금영수증','현금영수증 (지출증빙)'],['계산서','계산서 (면세)'],['카드전표','신용카드 전표'],['명세서','거래명세서·영수증'],['none','증빙 없음']];
+const PROOF_BULK24='입금처리(2024)'; /* 2024년 이체요청: 작성일 칸이 없어 증빙 확인 불가 → 일괄 분류 */
 const PROOF_ADEQ=new Set(['세금계산서','현금영수증','계산서']); // 홈택스 확인 대상 → 받을예정/수취완료 추적
 const PROOF_LABEL={'세금계산서':'세금계산서 (매입)','현금영수증':'현금영수증 (지출증빙)','계산서':'계산서 (면세)','카드전표':'신용카드 전표','명세서':'거래명세서·영수증','none':'증빙 없음'};
 function needsProof(r){return !!(r&&PROOF_ADEQ.has(r.proofType)&&r.proofStatus!=='수취완료'&&r.status!=='canceled'&&r.status!=='rejected');}
@@ -652,11 +653,11 @@ function pagerHtml(total){
 let _sort={payout:{k:'date',dir:-1},invoice:{k:'writeDate',dir:-1},vendors:{k:'cnt',dir:-1},expense:{k:'date',dir:-1},cardreport:{k:'date',dir:-1}};
 const SORTS={payout:[['date','이체요청일'],['due','이체희망일'],['name','거래처명'],['amount','금액'],['team','팀'],['status','상태'],['paid','지급일']],invoice:[['date','요청일'],['name','공급받는자'],['item','품목'],['writeDate','작성일'],['amount','합계'],['status','상태']],expense:[['date','사용일'],['name','사용처'],['amount','금액'],['team','팀'],['status','상태']],cardreport:[['date','사용일'],['name','사용처'],['amount','금액'],['holder','명의자'],['status','상태']]};
 const isExpPage=k=>(k==='expense'||k==='cardreport');
-let FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false};
+let FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false,b24:false};
 let PERIOD='month',PFROM='',PTO=''; // month | ytd | all | custom (기본=이번달)
 let PYM=''; // 선택한 연-월 (YYYY-MM) — 비어있으면 이번달
 let PYR=''; // 년도 탭에서 선택한 연도 (YYYY) — 비어있으면 올해
-function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false,dep:''};_q='';_page=1;}
+function clearFilter(){FILTER={teams:new Set(),requesters:new Set(),statuses:new Set(),anomaly:false,big:false,dep:'',b24:false};_q='';_page=1;}
 /* 컬럼 너비 조절(거래처/예금주 등 첫 열) — 드래그로 조절, localStorage 저장 */
 let COLW=(function(){try{return JSON.parse(localStorage.getItem('fin_colw')||'{}')}catch(e){return {}}})();
 function colwVar(key){return (COLW[key]||300)+'px';}
@@ -681,6 +682,7 @@ function visible(arr,kind){
   if(kind==='invoice'&&!FILTER.statuses.has('rejected'))list=list.filter(r=>!(r.status==='rejected'&&/^(삭제됨|수정으로 재등록)$/.test(r.rejectReason||'')));
   if(FILTER.statuses.size)list=list.filter(r=>FILTER.statuses.has(r.status));
   if(FILTER.dep&&kind==='invoice')list=list.filter(r=>FILTER.dep==='yes'?!!depositOf(r.id):(!depositOf(r.id)&&!_invOffset(r)));
+  if(FILTER.b24&&kind==='payout')list=list.filter(r=>r.proofStatus===PROOF_BULK24);
   if(FILTER.big&&kind==='payout')list=list.filter(r=>isBig(r));
   if(FILTER.anomaly&&kind==='payout')list=list.filter(r=>r.status==='requested'&&scanPayout(r).length);
   if(_q){const q=_q.toLowerCase();list=list.filter(r=>JSON.stringify(r).toLowerCase().includes(q));}
@@ -690,7 +692,7 @@ function tf(dim,v){const s=FILTER[dim];s.has(v)?s.delete(v):s.add(v);render();}
 function filterBar(kind){
   const sm=kind==='payout'?PSTATUS:(kind==='invoice'?ISTATUS:ESTATUS);
   const stats=Object.keys(sm);
-  const cnt=FILTER.teams.size+FILTER.statuses.size+(FILTER.anomaly?1:0)+(FILTER.big?1:0)+(FILTER.dep?1:0);
+  const cnt=FILTER.teams.size+FILTER.statuses.size+(FILTER.anomaly?1:0)+(FILTER.big?1:0)+(FILTER.dep?1:0)+(FILTER.b24?1:0);
   let h=`<div class="period-bar">${periodSel()}</div>`;
   h+=`<div class="filters"><div class="filtwrap"><button class="btn btn-sm ${cnt?'btn-line':'btn-secondary'}" onclick="event.stopPropagation();_filterOpen=!_filterOpen;render()">${I.filter}<span>필터${cnt?' · '+cnt:''}</span></button>`;
   if(_filterOpen){
@@ -698,7 +700,7 @@ function filterBar(kind){
     h+=`<div class="fgroup"><div class="fl">팀</div>${TEAMS_ALL.map(t=>`<button class="chip ${FILTER.teams.has(t)?'on':''}" onclick="tf('teams','${t}')">${escH(t)}</button>`).join('')}</div>`;
     h+=`<div class="fgroup"><div class="fl">상태</div>${stats.map(s=>`<button class="chip ${FILTER.statuses.has(s)?'on':''}" onclick="tf('statuses','${s}')">${sm[s][0]}${(kind==='payout'||kind==='invoice')&&s==='canceled'?' · 기본숨김':''}</button>`).join('')}</div>`;
     if(kind==='invoice')h+=`<div class="fgroup"><div class="fl">입금확인</div><button class="chip ${FILTER.dep==='no'?'on':''}" onclick="FILTER.dep=FILTER.dep==='no'?'':'no';render()">💰 입금 안 된 건만</button><button class="chip ${FILTER.dep==='yes'?'on':''}" onclick="FILTER.dep=FILTER.dep==='yes'?'':'yes';render()">✔ 입금확인된 건만</button></div>`;
-    if(kind==='payout')h+=`<div class="fgroup"><div class="fl">기타</div><button class="chip ${FILTER.anomaly?'on':''}" onclick="FILTER.anomaly=!FILTER.anomaly;render()">⚠️ 이상거래만</button><button class="chip ${FILTER.big?'on':''}" onclick="FILTER.big=!FILTER.big;render()">🔺 1천만+ (고액)</button></div>`;
+    if(kind==='payout')h+=`<div class="fgroup"><div class="fl">기타</div><button class="chip ${FILTER.anomaly?'on':''}" onclick="FILTER.anomaly=!FILTER.anomaly;render()">⚠️ 이상거래만</button><button class="chip ${FILTER.big?'on':''}" onclick="FILTER.big=!FILTER.big;render()">🔺 1천만+ (고액)</button><button class="chip ${FILTER.b24?'on':''}" title="증빙 확인이 안 돼 일괄 처리한 2024년 건만 봐요 (기간은 전체로 바뀌어요)" onclick="FILTER.b24=!FILTER.b24;if(FILTER.b24)PERIOD='all';_page=1;render()">${PROOF_BULK24}만</button></div>`;
     h+=`<div class="filtpop-foot">${cnt?`<button class="btn btn-sm btn-secondary" onclick="clearFilter();render()">초기화</button>`:'<span></span>'}<button class="btn btn-sm btn-primary" onclick="_filterOpen=false;render()">적용</button></div>`;
     h+='</div>';
   }
@@ -1106,7 +1108,8 @@ function renderPayout(){
     h+=`<td class="mhide" style="white-space:nowrap">${r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--billy-blue);text-decoration:underline;font-size:12px;white-space:nowrap">📎 링크 ↗</a>`:'<span class="t-sub">–</span>'}</td>`;
     /* 증빙확인 — 매입 계산서가 실제 발행됐는지 건별 체크 (적격증빙 대상만) */
     let _pv;
-    if(!PROOF_ADEQ.has(r.proofType))_pv='<span class="t-sub">–</span>';
+    if(r.proofStatus===PROOF_BULK24)_pv=`<span class="tag tag-gray" title="작성일 기록이 없어 증빙 확인 불가 — 일괄 분류">${PROOF_BULK24}</span>`;
+    else if(!PROOF_ADEQ.has(r.proofType))_pv='<span class="t-sub">–</span>';
     else if(r.proofStatus==='수취완료')_pv=canApprove()?`<button class="depbtn depon" onclick="event.stopPropagation();markProof('${r.id}',false)" title="클릭하면 미확인으로 되돌려요">✔ 확인됨${r.proofReceivedAt?' '+fmtD(r.proofReceivedAt):''}</button>`:`<span class="badge badge-deposit">✔ 확인됨</span>`;
     else _pv=canApprove()?`<button class="depbtn" onclick="event.stopPropagation();markProof('${r.id}',true)" title="계산서 발행 확인했으면 클릭">☐ 미확인</button>`:'<span class="t-sub">미확인</span>';
     h+=`<td class="mhide" style="white-space:nowrap;font-size:12px">${_pv}</td>`;
@@ -1323,6 +1326,7 @@ function viewPayout(id){
   </div>${proof}${fuel}${wh}${memoHtml(r)}`,foot);
 }
 function proofDetailHtml(r){
+  if(r.proofStatus===PROOF_BULK24)return `<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧾 증빙</div><div class="dl"><dt>증빙확인</dt><dd>${PROOF_BULK24} <span class="t-sub">— 작성일 기록이 없어 확인 불가, 일괄 분류</span></dd></div>`;
   if(!r.proofType)return '';
   const url=r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">Dropbox 링크 ↗</a>`:'';
   let body='';
@@ -1339,7 +1343,8 @@ function proofDetailHtml(r){
   }
   return `<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧾 증빙</div>${body}`;
 }
-function markProof(id,received){sv('fin_mark_proof',{p_id:id,p_received:!!received},()=>{const r=DB.payout.find(x=>x.id===id);if(r){r.proofStatus=received?'수취완료':'받을예정';r.proofReceivedAt=received?today():'';}}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();render();toast(received?'증빙 수취완료로 표시했어요.':'받을예정으로 되돌렸어요.','ok');});}
+function markProof(id,received){return _guard('pr'+id,received?'수취완료 처리 중…':'되돌리는 중…',()=>_markProof(id,received));}
+function _markProof(id,received){return sv('fin_mark_proof',{p_id:id,p_received:!!received},()=>{const r=DB.payout.find(x=>x.id===id);if(r){r.proofStatus=received?'수취완료':'받을예정';r.proofReceivedAt=received?today():'';}}).then(()=>{const o=document.getElementById('ov');if(o)o.remove();render();toast(received?'증빙 수취완료로 표시했어요.':'받을예정으로 되돌렸어요.','ok');});}
 /* 관리자 메모(기록) — 관리자만 보고/작성 */
 function memoHtml(r){
   if(!canViewAll())return '';
