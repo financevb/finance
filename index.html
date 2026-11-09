@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261109a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261109b'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -438,14 +438,18 @@ const POLICY_HTML='<div class="policy"><b>📌 이체·발행 정책 (꼭 확인
  +'<li>발행 전 <b>공급가액·세액·합계금액</b> 한 번 더 확인</li>'
  +'<li><b>발행 주체 = 실 예금주</b> 동일 여부 확인 후 요청</li></ol></div>';
 /* ---------- 증빙 안내 팝업 (이체 요청) ---------- */
-/* '새 이체 요청' 전에 항상 안내창을 띄움 (기한 없음). */
-const NOTICE_BODY='<div class="policy" style="margin-bottom:0"><b>🧾 증빙 안내</b><div style="margin-top:7px;font-size:13.5px">· 퀵비, 운반비 = <b>간이영수증(종이영수증) 및 세금계산서 등 증빙 필수</b>입니다!<br>· 고객 환불비, 반품 택배비 = <b>증빙 필요 없음</b><br>· 그 외 = <b>모두 증빙 필요</b></div></div>';
+/* 새 이체 요청·외화 지급·일괄 입력 전에 안내창을 띄움. 표시 기한 = NOTICE_UNTIL (사용자 요청 2099-12-31) */
+const NOTICE_UNTIL='2099-12-31';
+function noticeOn(){return today()<=NOTICE_UNTIL;}
+let _noticeNext=null;
+function withNotice(fn){if(!noticeOn()){fn();return;}_noticeSeed=null;_noticeNext=fn;modal('잠깐 확인해주세요','',NOTICE_BODY,'<button class="btn btn-primary" onclick="noticeOk()">확인했어요</button>');}
+const NOTICE_BODY='<div class="policy" style="margin-bottom:0"><b>🧾 증빙 안내</b><div style="margin-top:7px;font-size:13.5px">· 퀵비, 운반비, 택배비, 착불비 = <b>간이영수증(종이영수증) 또는 매입세금계산서 증빙 필수</b>입니다!<br>· 고객 환불비, 반품 택배비 = <b>증빙 필요 없음</b><br>· 그 외 = <b>모두 증빙 필요</b></div></div>';
 let _noticeSeed=null;
 function openPayoutNotice(seed){
-  _noticeSeed=seed||{};
+  _noticeNext=null;_noticeSeed=seed||{};
   modal('잠깐 확인해주세요','',NOTICE_BODY,'<button class="btn btn-primary" onclick="noticeOk()">확인했어요</button>');
 }
-function noticeOk(){const s=_noticeSeed||{};_noticeSeed=null;s._noticed=1;closeModal();openPayoutForm(s);}
+function noticeOk(){if(_noticeNext){const f=_noticeNext;_noticeNext=null;closeModal();f();return;}const s=_noticeSeed||{};_noticeSeed=null;s._noticed=1;closeModal();openPayoutForm(s);}
 /* ---------- 세션/권한 ---------- */
 const ROLE_DEF={
   finance:{name:'데모 재무',team:'GA',rl:'재무 승인',av:'재'},
@@ -1132,7 +1136,7 @@ function syncProofDate(v){const p=document.getElementById('f_proofdate');if(p&&v
 function openPayoutForm(seed){
   seed=seed||{};
   /* 신규 요청일 때만, 안내 기간 내라면 안내창을 먼저 보여줌 */
-  if(!seed.editId&&!seed._noticed){openPayoutNotice(seed);return;}
+  if(noticeOn()&&!seed.editId&&!seed._noticed){openPayoutNotice(seed);return;}
   if(seed.bank)seed.bank=normBank(seed.bank);
   /* 적요 앞의 [희망 날짜] 태그를 분리해 날짜 칸에 채움 */
   let seedDue='';let seedPurpose=seed.purpose||'';
@@ -1663,7 +1667,8 @@ function fxAccCheck(){
   const o=_fxP.find(x=>x.name.replace(/[\s.,]/g,'').toUpperCase()===name.replace(/[\s.,]/g,'').toUpperCase());
   if(o&&o.accs.length&&!o.accs.includes(a))h.innerHTML='<b style="color:var(--warn,#c2410c)">지난 계좌와 달라요.</b> 인보이스 계좌가 맞는지 한 번 더 확인해 주세요.';
 }
-function openFXForm(){
+function openFXForm(_ok){
+  if(!_ok){withNotice(()=>openFXForm(1));return;}
   const cats=CATEGORIES.filter(x=>x!=='유류비').map(x=>`<option ${x==='물품대금'?'selected':''}>${x}</option>`).join('');
   _fxP=fxPayees();
   const chips=_fxP.length?`<div class="form-row"><label>자주 보내는 거래처<span class="hint">누르면 이름·은행·SWIFT·선적지가 채워져요</span></label><div style="display:flex;flex-wrap:wrap;gap:6px">${_fxP.map((o,i)=>`<button type="button" class="btn btn-sm btn-line" onclick="fxPick(${i})" title="${escH(o.name)}">${escH(o.name.length>26?o.name.slice(0,26)+'…':o.name)} <span class="t-sub">${o.n}건</span></button>`).join('')}</div></div>`:'';
@@ -1696,7 +1701,8 @@ function submitFX(){
   sv('fin_submit_payout',{p:payoutPayload(r,0)},()=>{DB.payout.unshift(r);}).then(()=>{closeModal();current='payout';render();toast('외화 지급 신청 등록 ('+won(amt)+' '+unit+').','ok');});
 }
 /* ===================== 이체 일괄 입력(엑셀 붙여넣기) ===================== */
-function openBulkForm(){
+function openBulkForm(_ok){
+  if(!_ok){withNotice(()=>openBulkForm(1));return;}
   modal('이체 일괄 입력','wide',`<div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">📥 엑셀에서 복사 → 아래에 붙여넣기</b><br>한 줄에 하나씩, <b>예금주 · 은행 · 계좌 · 금액 · 적요</b> 순서 (탭/콤마 구분). 적요는 생략 가능.</div>
     <div class="form-row"><textarea class="input" id="bulk_data" style="min-height:170px;font-family:monospace;font-size:12.5px" placeholder="(주)폴레드패밀리	기업	420-097688-04-023	1100000	6월 광고비&#10;블루박스물류	우리	1002-345-678901	480000	택배비" oninput="bulkPreview()"></textarea></div>
     <div id="bulk_pv" class="preview-box" style="display:none"></div>
