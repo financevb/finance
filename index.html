@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261109d'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261111a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1317,7 +1317,7 @@ function viewPayout(id){
   let foot=`${editBtn}<button class="btn btn-line btn-sm" onclick="closeModal();clonePayout('${id}')">${I.copy}<span>복제</span></button><button class="btn btn-secondary" onclick="closeModal()">닫기</button>`;
   if(canApprove()&&r.status==='requested')foot=`${editBtn}${canReject()?`<button class="btn btn-danger" onclick="decidePayout('${id}','rejected')">반려</button>`:''}<button class="btn btn-primary" onclick="decidePayout('${id}','paid')">지급완료</button>`;
   const fuel=r.fuel?`<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🚗 유류비/출장 정보</div><div class="dl"><dt>경로</dt><dd>${escH(r.fuel.from)} → ${escH(r.fuel.to)} ${r.fuel.roundTrip?'(왕복)':''}</dd><dt>목적</dt><dd>${escH(r.fuel.visit||'')}</dd><dt>거리</dt><dd>${escH(r.fuel.km||'-')} km</dd><dt>차량</dt><dd>${escH(r.fuel.carNo||'-')}</dd></div>`:'';
-  const wh=r.wh?`<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧾 원천징수</div><div class="dl"><dt>지급총액</dt><dd>${won(r.wh.gross)}원</dd><dt>원천징수</dt><dd>${won(r.wh.tax)}원 (${escH(r.wh.type)})</dd><dt>실지급액</dt><dd><b>${won(r.wh.net)}원</b></dd></div>`:'';
+  const wh=r.wh?`<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧾 원천징수</div><div class="dl"><dt>지급총액</dt><dd>${won(r.wh.gross)}원</dd><dt>원천징수</dt><dd>${won(r.wh.tax)}원 (${escH(r.wh.type)})</dd><dt>실지급액</dt><dd><b>${won(r.wh.net)}원</b></dd><dt>소득신고 성함</dt><dd>${escH(r.wh.taxName||'-')}</dd><dt>주민등록번호</dt><dd>${whRrn(r.wh.rrn)}</dd></div>`:'';
   const proof=proofDetailHtml(r);
   modal('이체 요청 상세','',(flags.length?'<div style="margin-bottom:12px">'+flags.map(flagHtml).join('')+'</div>':'')+`<div class="dl">
     <dt>상태</dt><dd><span class="badge ${st[1]}">${st[0]}</span></dd>
@@ -1621,6 +1621,8 @@ function openWHForm(){
   `,`<button class="btn btn-secondary" onclick="closeModal()">취소</button><button class="btn btn-primary" onclick="submitWH()">신청</button>`);
   whCalc();
 }
+/* 주민번호 표시: 재무(정채영)는 전체, 그 외는 뒷자리 가림 */
+function whRrn(v){const d=String(v||'').replace(/\D/g,'');if(d.length!==13)return '<span style="color:var(--gray)">미입력</span>';return canManageAll()?d.slice(0,6)+'-'+d.slice(6):d.slice(0,6)+'-'+d[6]+'******';}
 /* 위하고(국세청) 방식: 소득세(3%·8%)와 지방소득세(소득세의 10%)를 따로 계산해 각각 10원 미만 절사, 소득세 1,000원 미만은 소액부징수 */
 function whTax(g,type){const pct=Math.round((WH_RATES[type]||0.033)/1.1*1000);let it=Math.floor(g*pct/10000)*10;if(it<1000)it=0;const lt=Math.floor(it/100)*10;return {it,lt,tax:it+lt};}
 function whCalc(){const g=numVal('w_gross');const t=whTax(g,val('w_type'));const e=document.getElementById('w_tax');if(!e)return;e.textContent=won(t.tax);e.title='소득세 '+won(t.it)+' + 지방소득세 '+won(t.lt);document.getElementById('w_net').textContent=won(g-t.tax);}
