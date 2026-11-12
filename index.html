@@ -343,7 +343,7 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function daysBetween(a,b){return Math.round((new Date(a)-new Date(b))/86400000);}
 function uid(p){return (p||'id')+Math.random().toString(36).slice(2,8);}
-const APP_VERSION='v20261111b'; /* 배포 시마다 갱신 — 새 버전 안내용 */
+const APP_VERSION='v20261112a'; /* 배포 시마다 갱신 — 새 버전 안내용 */
 (function(){if(location.protocol!=='https:')return;
   async function chk(){try{
     const t=await fetch('index.html?vchk='+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -2120,7 +2120,8 @@ function openInvoiceForm(seed){
   const amendBox=seed.amendOf?`<div class="policy" style="background:var(--billy-blue-50);border-color:var(--billy-blue-100)"><b style="color:var(--billy-blue)">🔁 수정 재발행</b> — 홈택스 수정세금계산서와 같은 순서예요.<br>① 기존 계산서 <b>${won(seed.origTotal)}원</b>을 취소하는 <b>마이너스 ${won(seed.origTotal)}원</b> 요청이 자동으로 들어가요 (작성일 ${escH(fmtD(seed.origDate))}).<br>② 아래에서 고친 내용으로 <b>새 발행 요청</b>이 함께 들어가요.<br><span class="t-sub">작성일은 기존 날짜로 채워뒀어요. 금액·사업장 정보를 잘못 적은 경우엔 그대로 두고, 금액이 나중에 달라진 경우엔 달라진 날짜로 바꿔 주세요.</span></div>`:'';
   modal(seed.amendOf?'세금계산서 수정 재발행':(seed.editId?'세금계산서 발행 요청 수정':'새 세금계산서 발행 요청'),'wide',(seed.amendOf?amendBox:POLICY_HTML)+`
     <div class="f2"><div class="form-row"><label>상호 <span class="req">*</span></label><input class="input" id="i_company" value="${escH(seed.company||'')}" placeholder="(주)베스트마트" list="vlist2" oninput="onInvPick()"><datalist id="vlist2">${_invCompanyNames().map(n=>`<option value="${escH(n)}">`).join('')}</datalist></div><div class="form-row"><label>사업자등록번호 <span class="req">*</span></label><input class="input num" id="i_bizno" value="${escH(seed.bizNo||'')}" placeholder="10자리" oninput="onInvBizPick()"></div></div>
-    <div class="f2"><div class="form-row"><label>대표자 <span class="req">*</span></label><input class="input" id="i_ceo" value="${escH(seed.ceo||'')}"></div><div class="form-row"><label>이메일 <span class="req">*</span></label><input class="input" id="i_email" value="${escH(seed.email||'')}" placeholder="tax@company.kr"></div></div>
+    <div class="f2"><div class="form-row"><label>대표자 <span class="req">*</span></label><input class="input" id="i_ceo" value="${escH(seed.ceo||'')}"></div><div class="form-row"><label>이메일 <span class="req">*</span></label><input class="input" id="i_email" value="${escH(_mailSplit(seed.email)[0]||'')}" placeholder="tax@company.kr"></div></div>
+    <div class="form-row"><label>이메일 2<span class="hint">선택 · 계산서를 두 곳으로 받아야 할 때만</span></label><input class="input" id="i_email2" value="${escH(_mailSplit(seed.email)[1]||'')}" placeholder="두 번째 받는 이메일 (없으면 비워두세요)"></div>
     <div class="form-row"><label>사업장 주소 <span class="req">*</span></label><input class="input" id="i_addr" value="${escH(seed.addr||'')}" placeholder="서울특별시 종로구 ..."></div>
     <div class="f2"><div class="form-row"><label>업태 <span class="req">*</span></label><input class="input" id="i_bt" value="${escH(seed.bizType||'')}" placeholder="예: 금융"></div><div class="form-row"><label>종목 <span class="req">*</span></label><input class="input" id="i_bi" value="${escH(seed.bizItem||'')}" placeholder="예: 여신전문업"></div></div>
     <div class="t-sub" id="i_autohint" style="margin:-4px 0 10px;display:none"></div>
@@ -2139,6 +2140,10 @@ function openInvoiceForm(seed){
 }
 /* 한 번 등록한 업체는 최근 요청 기준으로 자동 입력 — 항목마다 가장 최근의 실제 값, 직접 고친 칸은 유지 */
 const INV_AUTO_FIELDS=[['i_bizno','bizNo'],['i_company','company'],['i_ceo','ceo'],['i_email','email'],['i_addr','addr'],['i_bt','bizType'],['i_bi','bizItem']];
+/* 받는 이메일 최대 2개 — 서버엔 "a@x.kr, b@y.kr" 한 칸으로 저장 */
+function _mailSplit(s){return String(s||'').split(/[,;\s]+/).map(x=>x.trim()).filter(x=>x&&x!=='-');}
+function _mailJoin(a,b){return [a,b].map(x=>String(x||'').trim()).filter(x=>x&&x!=='-').join(', ');}
+const INV_FILL_FIELDS=INV_AUTO_FIELDS.filter(([id])=>id!=='i_email').concat([['i_email','email1'],['i_email2','email2']]);
 function _invNorm(s){return String(s||'').replace(/\(주\)|㈜|주식회사|\s/g,'').toLowerCase();}
 function _invFilled(v){return !/^[-–—_.\s]*$/.test(String(v||''));}
 function _invCompanyNames(){const seen=new Set(),out=[];const add=n=>{const k=_invNorm(n);if(k&&!seen.has(k)){seen.add(k);out.push(n);}};(DB.invoice||[]).filter(x=>x.status!=='rejected').forEach(x=>add(x.company));VENDORS.filter(v=>v.bizNo).forEach(v=>add(v.name));return out;}
@@ -2156,8 +2161,9 @@ function _invRecent(name,bizNo){
 function _invAutofill(name,bizNo,clearStale){
   const rec=_invRecent(name,bizNo);const v=VENDORS.find(x=>x.name===name||(bizNo&&digits(x.bizNo)===bizNo));
   const data=Object.assign({},v?{bizNo:v.bizNo||'',email:v.email||''}:{},rec||{});
+  const _ms=_mailSplit(data.email);data.email1=_ms[0]||'';data.email2=_ms[1]||'';
   let n=0;
-  INV_AUTO_FIELDS.forEach(([id,k])=>{const el=document.getElementById(id);if(!el)return;
+  INV_FILL_FIELDS.forEach(([id,k])=>{const el=document.getElementById(id);if(!el)return;
     const open=!_invFilled(el.value)||el.dataset.auto==='1';
     if(!open)return;
     const vv=_invFilled(data[k])?data[k]:'';
@@ -2181,7 +2187,10 @@ function _invRequiredOk(r){
   const miss=INV_REQUIRED.filter(([id])=>{const el=document.getElementById(id);if(el)el.style.borderColor='';const v=String(val(id)||'').trim();return id==='i_supply'?!r.supply:/^[-–—_.\s]*$/.test(v);});
   miss.forEach(([id])=>{document.getElementById(id).style.borderColor='#e5484d';});
   if(miss.length){document.getElementById(miss[0][0]).focus();toast('아직 안 채운 항목: '+miss.map(x=>x[1]).join(', '),'err');return false;}
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim())){const el=document.getElementById('i_email');el.style.borderColor='#e5484d';el.focus();toast('이메일 형식을 확인해 주세요.','err');return false;}
+  const _okMail=v=>/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(String(v||'').trim());
+  if(!_okMail(val('i_email'))){const el=document.getElementById('i_email');el.style.borderColor='#e5484d';el.focus();toast('이메일 형식을 확인해 주세요. (한 칸에 하나만 적어 주세요)','err');return false;}
+  const _e2=document.getElementById('i_email2');if(_e2)_e2.style.borderColor='';
+  if(_e2&&String(_e2.value||'').trim()&&!_okMail(_e2.value)){_e2.style.borderColor='#e5484d';_e2.focus();toast('이메일 2 형식을 확인해 주세요. (한 칸에 하나만 적어 주세요)','err');return false;}
   return true;
 }
 /* 등록 공통 — 마이너스(수정) 발행·휴일 연장 기한은 서버 검증이 몰라서, 일단 통과값으로 등록 후 실제값으로 보정. 새 건 id 반환 */
@@ -2241,7 +2250,7 @@ async function _submitAmend(r){
     _invSubmitting=false;_amendId=null;syncOwnerFor(r.requester);closeModal();render();toast('마이너스와 재발행 요청을 함께 등록했어요.','ok');
   }catch(e){_invSubmitting=false;const b=document.querySelector('#ov .modal-foot .btn-primary');if(b)b.disabled=false;}
 }
-function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat');const r={id:uid('v'),requester:ME().name,team:ME().team,saleType:val('i_type'),company:val('i_company'),bizNo:digits(val('i_bizno')),ceo:val('i_ceo'),email:val('i_email'),writeDate:val('i_date'),itemName:val('i_item'),supply,tax:vat,total:supply+vat,evidence:val('i_evidence'),addr:(val('i_addr')||'').trim(),bizType:(val('i_bt')||'').trim(),bizItem:(val('i_bi')||'').trim(),status:'requested',applied:today()};
+function submitInvoice(){const supply=numVal('i_supply');const vat=numVal('i_vat');const r={id:uid('v'),requester:ME().name,team:ME().team,saleType:val('i_type'),company:val('i_company'),bizNo:digits(val('i_bizno')),ceo:val('i_ceo'),email:_mailJoin(val('i_email'),val('i_email2')),writeDate:val('i_date'),itemName:val('i_item'),supply,tax:vat,total:supply+vat,evidence:val('i_evidence'),addr:(val('i_addr')||'').trim(),bizType:(val('i_bt')||'').trim(),bizItem:(val('i_bi')||'').trim(),status:'requested',applied:today()};
   if(!_invRequiredOk(r))return;
   if(r.saleType==='영세'&&r.tax!==0){toast('영세는 세액이 0원이어야 해요. 세액을 0으로 고쳐주세요.','err');return;}
   if(r.bizNo.length!==10){toast('사업자등록번호는 10자리예요.','err');return;}
@@ -2717,12 +2726,12 @@ function _htSkipReason(r){
 }
 function _htRow(r){
   const S=HT_SUPPLIER,w=String(r.writeDate),sup=String(Math.round(Number(r.supply))),tax=String(Math.round(Number(r.tax)||0));
-  const mail=/@/.test(r.email||'')?_htClip(r.email,40):'';
+  const _m=_mailSplit(r.email).filter(x=>/@/.test(x));const mail=_m[0]?_htClip(_m[0],40):'',mail2=_m[1]?_htClip(_m[1],40):'';
   const row=new Array(HT_COLS).fill('');
   row[0]=(r.saleType==='영세')?'02':'01';
   row[1]=w.replace(/-/g,'');
   row[2]=S.bizNo;row[4]=S.name;row[5]=S.ceo;row[6]=S.addr;row[7]=S.bizType;row[8]=S.bizItem;row[9]=S.email;
-  row[10]=digits(r.bizNo);row[12]=_htClip(r.company,70);row[13]=_htClip(r.ceo,30);row[14]=_htClip(r.addr,150);row[15]=_htClip(r.bizType,40);row[16]=_htClip(r.bizItem,60);row[17]=mail;
+  row[10]=digits(r.bizNo);row[12]=_htClip(r.company,70);row[13]=_htClip(r.ceo,30);row[14]=_htClip(r.addr,150);row[15]=_htClip(r.bizType,40);row[16]=_htClip(r.bizItem,60);row[17]=mail;row[18]=mail2;
   row[19]=sup;row[20]=tax;
   row[22]=w.slice(8,10);row[23]=_htClip(r.itemName,100);row[27]=sup;row[28]=tax;
   row[58]=depData(r.id).d?'01':'02'; /* 입금확인된 건은 영수, 아니면 청구 */
