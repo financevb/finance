@@ -568,10 +568,24 @@ function isLockedMonth(d){return !!d&&LOCKED.has(String(d).slice(0,7));}
 function toggleLock(ym){sv('fin_toggle_lock',{p_ym:ym},()=>{if(LOCKED.has(ym))LOCKED.delete(ym);else LOCKED.add(ym);}).then(()=>{render();toast(LOCKED.has(ym)?ym+' 마감했어요.':ym+' 마감 해제했어요.','ok');});}
 function addMonth(d,n){const p=String(d).split('-');const x=new Date(+p[0],+p[1]-1+n,+p[2]);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');}
 /* ===================== 이상거래 엔진 ===================== */
+/* 지급 이력으로 본 거래처 — 거래처 관리(마스터)에 아직 등록되지 않았어도,
+   같은 이름으로 지급완료된 적이 있으면 '첫 거래'가 아니다. (최근 건이 앞) */
+function paidHistory(r,excludeId){
+  const k=String(r.payee||'').replace(/\(주\)|주식회사|\s|㈜/g,'');if(!k)return [];
+  return DB.payout.filter(x=>x.status==='paid'&&x.id!==r.id&&x.id!==excludeId&&String(x.payee||'').replace(/\(주\)|주식회사|\s|㈜/g,'')===k);
+}
 function scanPayout(r,excludeId){
   const flags=[];const v=findVendor(r.payee);
   if(r.category!=='유류비'){
-    if(!v){flags.push({s:'caution',t:'🆕 첫 거래',d:'과거 이력에 없는 거래처예요. 통장사본·사업자등록증(또는 신분증) 확인 후 등록하세요.'});}
+    if(!v){
+      const hist=paidHistory(r,excludeId);
+      if(!hist.length){flags.push({s:'caution',t:'🆕 첫 거래',d:'과거 이력에 없는 거래처예요. 통장사본·사업자등록증(또는 신분증) 확인 후 등록하세요.'});}
+      else{
+        /* 미등록이지만 지급한 적 있는 거래처 — 계좌가 이전 지급 계좌와 다를 때만 알린다 */
+        const knownH=hist.map(x=>digits(x.account)).filter(Boolean);
+        if(r.account&&knownH.length&&!knownH.includes(digits(r.account))){flags.push({s:'warn',t:'🔁 계좌 변경',d:'이전에 지급한 계좌와 달라요 (최근 지급 계좌 '+(hist[0].bank||'-')+' '+(hist[0].account||'-')+'). 변경 확인 필요.'});}
+      }
+    }
     else{
       const known=v.accounts.map(a=>digits(a.account));
       if(r.account&&!known.includes(digits(r.account))){const pa=v.accounts.find(a=>a.primary)||v.accounts[0];flags.push({s:'warn',t:'🔁 계좌 변경',d:'기존 계좌와 달라요 (대표계좌 '+(pa?pa.bank+' '+pa.account:'-')+'). 변경 확인 필요.'});}
@@ -595,6 +609,7 @@ function anomalyDetail(id){
     b+=`<div class="anom-card ${f.s}"><div class="anom-t">${f.t}</div><div class="anom-d">${escH(f.d)}</div>`;
     if(/중복/.test(f.t)){const dups=DB.payout.filter(x=>x.id!==r.id&&x.status!=='canceled'&&x.status!=='rejected'&&payDup(x)===payDup(r)&&Math.abs(daysBetween(r.applied||today(),x.applied))<=14);b+=`<div class="anom-list">${dups.map(d=>`<div class="anom-row warn"><span>${escH(d.applied||'-')}</span><b>${won(d.amount)}원</b>${stb(d.status)}<span>${escH(d.purpose||'')}</span></div>`).join('')||'<div class="t-sub">매칭 내역 없음</div>'}</div>`;}
     else if(/계좌/.test(f.t)&&v){b+=`<div class="anom-list">${v.accounts.map(a=>`<div class="anom-row"><span>${a.primary?'대표계좌':'등록계좌'}</span><span>${escH(a.bank||'-')}</span><b class="num">${escH(a.account)}</b></div>`).join('')}<div class="anom-row warn"><span>이번 요청</span><span>${escH(r.bank||'-')}</span><b class="num">${escH(r.account||'-')}</b></div></div>`;}
+    else if(/계좌/.test(f.t)&&!v){const seenA={};const accs=paidHistory(r).filter(x=>{const k=digits(x.account);if(!k||seenA[k])return false;seenA[k]=1;return true;});b+=`<div class="anom-list">${accs.map(a=>`<div class="anom-row"><span>지급 이력 ${escH(fmtD(a.paidAt||a.applied)||'')}</span><span>${escH(a.bank||'-')}</span><b class="num">${escH(a.account)}</b></div>`).join('')}<div class="anom-row warn"><span>이번 요청</span><span>${escH(r.bank||'-')}</span><b class="num">${escH(r.account||'-')}</b></div></div>`;}
     else if(/급증|급감/.test(f.t)&&v){b+=`<div class="anom-list"><div class="anom-row warn"><span>이번 금액</span><b>${won(r.amount)}원</b></div><div class="anom-row"><span>과거 평균</span><b>${won(v.avg)}원</b></div><div class="anom-row"><span>과거 최대</span><b>${won(v.max)}원</b></div><div class="anom-row"><span>거래 횟수</span><b>${v.cnt}회</b></div></div>`;}
     else if(/첫\s?거래/.test(f.t)){b+=`<div class="t-sub">🆕 <b>첫 거래처네요!</b> 추가 증빙 링크(Dropbox)에 <b>통장사본·사업자등록증 또는 신분증</b>을 넣어주세요. 첫 거래처는 기본 서류 확인 후 이체가 완료됩니다. 확인 뒤 <b>거래처 관리 → 신규 거래처 승인</b>에서 등록할 수 있어요.</div>`;}
     b+='</div>';
@@ -1227,7 +1242,8 @@ function dupHint(){const el=document.getElementById('f_anom');if(!el)return;cons
   const bizNorm=digits(val('f_bizno'));
   const vByBiz=bizNorm?vendorByBiz(bizNorm):null;
   const isNew=r.payee?(bizNorm.length>=10?!vByBiz:!vend):false;
-  const newVendorNote=isNew?`<div style="margin-top:8px;background:var(--billy-blue-50);border:1px solid var(--billy-blue-100);border-radius:var(--r-md);padding:10px 12px;font-size:12.5px;line-height:1.65;color:var(--gray-800)">🆕 <b>첫 거래처네요!</b> 첫 이체가 필요한 신규 거래처는 <b>통장사본 및 사업자등록증</b>(개인은 <b>신분증 사본</b>)이 필요해요. 드랍박스 <b>Finance 폴더</b>에 저장하고 URL을 기재해 주세요.<br><a href="${DROPBOX_FINANCE}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;color:var(--billy-blue);font-weight:700;text-decoration:underline">📁 Dropbox Finance 폴더 열기 ↗</a></div>`:'';
+  const hasPaidHist=paidHistory(r,_editPayoutId).length>0; /* 지급한 적 있는 거래처면 첫 거래 서류 안내는 생략 */
+  const newVendorNote=(isNew&&!hasPaidHist)?`<div style="margin-top:8px;background:var(--billy-blue-50);border:1px solid var(--billy-blue-100);border-radius:var(--r-md);padding:10px 12px;font-size:12.5px;line-height:1.65;color:var(--gray-800)">🆕 <b>첫 거래처네요!</b> 첫 이체가 필요한 신규 거래처는 <b>통장사본 및 사업자등록증</b>(개인은 <b>신분증 사본</b>)이 필요해요. 드랍박스 <b>Finance 폴더</b>에 저장하고 URL을 기재해 주세요.<br><a href="${DROPBOX_FINANCE}" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;color:var(--billy-blue);font-weight:700;text-decoration:underline">📁 Dropbox Finance 폴더 열기 ↗</a></div>`:'';
   const bottomNote=isNew?`<div class="t-sub" style="margin-top:8px">📎 미등록 거래처예요. 안전을 위해 <b>거래처 관리</b>에서 거래처 서류 등록 부탁드립니다.</div>`:'';
   el.innerHTML=(flags.length?'<div style="margin-bottom:6px">'+flags.map(flagHtml).join('')+'</div>':'')+(big?`<div class="t-sub" style="margin-top:6px">🔺 1천만원 이상 — 고액 거래건으로 기록됩니다.</div>`:'')+newVendorNote+bottomNote;}
 let _paySubmitting=false; /* 저장 연타 시 중복 등록 방지 */
@@ -1236,6 +1252,12 @@ function submitPayout(){
   const pt=val('f_prooftype'),adeq=PROOF_ADEQ.has(pt);
   const r={id:uid('p'),requester:ME().name,team:ME().team,payee:val('f_payee'),bank:val('f_bank'),account:val('f_account'),amount:amtVal('f_amount',val('f_unit')||'원'),unit:val('f_unit')||'원',category:val('f_cat'),purpose:val('f_purpose'),evidence:val('f_evidence'),proofType:pt,proofDate:adeq?val('f_proofdate'):'',proofStatus:adeq?(val('f_proofstatus')||'받을예정'):'',proofReason:pt==='none'?val('f_proofreason'):'',proofReceivedAt:(adeq&&val('f_proofstatus')==='수취완료')?today():'',hasTax:pt==='세금계산서',status:'requested',applied:today(),paidAt:''};
   const due=val('f_duedate');
+  /* 지난 날짜로는 신청 불가 (수정할 때 원래 날짜를 그대로 두는 것은 허용). 재무 담당자만 확인 후 소급 등록 가능 */
+  const _dueOld=_editPayoutId?DB.payout.find(x=>x.id===_editPayoutId):null;
+  if(due&&due<today()&&!(_dueOld&&dueOf(_dueOld)===due)){
+    if(!canManageAll()){toast('이체 희망일이 지난 날짜예요 ('+fmtD(due)+'). 오늘 이후 날짜로 바꿔 주세요.','err');const _de=document.getElementById('f_duedate');if(_de)_de.focus();return;}
+    if(!confirm('이체 희망일이 지난 날짜예요 ('+due+').\n\n이 날짜 그대로 등록하려면 [확인], 날짜를 고치려면 [취소]를 눌러 주세요.'))return;
+  }
   if(due)r.purpose='[희망 '+due+'] '+(r.purpose||'');
   if(!r.payee||!r.account||!r.amount){toast('거래처·계좌·금액은 필수예요.','err');return;}
   if(!pt){toast('증빙 유형을 선택해 주세요. (미수취 시 가산세 대상이에요)','err');return;}
@@ -1286,7 +1308,8 @@ function submitFuel(){
   r.approver=approverFor(r.requester,amount);
   sv('fin_submit_payout',{p:payoutPayload(r,0)},()=>{DB.payout.unshift(r);}).then(()=>{closeModal();current='payout';render();toast('유류비 신청을 등록했어요.','ok');});
 }
-function clonePayout(id){const r=DB.payout.find(x=>x.id===id);if(!r)return;openPayoutForm({payee:r.payee,bank:r.bank,account:r.account,amount:r.amount,unit:r.unit,category:r.category,purpose:r.purpose,proofType:r.proofType});toast('과거 요청을 복제했어요.','ok');}
+/* 복제 — 적요 앞의 [희망 날짜] 태그는 떼고 넘긴다 → 이체 희망일이 예전 날짜가 아니라 오늘로 채워진다 */
+function clonePayout(id){const r=DB.payout.find(x=>x.id===id);if(!r)return;const hadDue=dueOf(r);openPayoutForm({payee:r.payee,bank:r.bank,account:r.account,amount:r.amount,unit:r.unit,category:r.category,purpose:purposeText(r),proofType:r.proofType});toast(hadDue&&hadDue!==today()?'복제했어요. 이체 희망일은 오늘로 바꿔 두었으니 확인해 주세요.':'과거 요청을 복제했어요.','ok');}
 function canEditPayout(r){return r&&r.status==='requested'&&!r.fuel&&r.category!=='유류비'&&(isMine(r)||canManageAll());} /* 3.3% 지급도 수정 가능 (전용 폼으로 열림) */
 function canDeletePayout(r){return r&&((isMine(r)&&r.status!=='paid')||canManageAll());} /* 작성자: 본인 건(지급완료 전) / 정채영: 전체 */
 function batchDeletePayout(){
@@ -1319,6 +1342,9 @@ function viewPayout(id){
   const fuel=r.fuel?`<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🚗 유류비/출장 정보</div><div class="dl"><dt>경로</dt><dd>${escH(r.fuel.from)} → ${escH(r.fuel.to)} ${r.fuel.roundTrip?'(왕복)':''}</dd><dt>목적</dt><dd>${escH(r.fuel.visit||'')}</dd><dt>거리</dt><dd>${escH(r.fuel.km||'-')} km</dd><dt>차량</dt><dd>${escH(r.fuel.carNo||'-')}</dd></div>`:'';
   const wh=r.wh?`<div class="hr"></div><div style="font-weight:700;font-size:13px;margin-bottom:8px">🧾 원천징수</div><div class="dl"><dt>지급총액</dt><dd>${won(r.wh.gross)}원</dd><dt>원천징수</dt><dd>${won(r.wh.tax)}원 (${escH(r.wh.type)})</dd><dt>실지급액</dt><dd><b>${won(r.wh.net)}원</b></dd><dt>소득신고 성함</dt><dd>${escH(r.wh.taxName||'-')}</dd><dt>주민등록번호</dt><dd>${whRrn(r.wh.rrn)}</dd></div>`:'';
   const proof=proofDetailHtml(r);
+  /* 증빙 링크는 증빙 유형과 상관없이 항상 보여주고, 신청인 본인(과 재무 담당자)은 지급완료 뒤에도 추가·변경할 수 있다 */
+  const canEv=(isMine(r)||canManageAll())&&(r.status==='requested'||r.status==='paid');
+  const evRow=`<dt>증빙 링크</dt><dd>${r.evidence?`<a href="${escH(r.evidence)}" target="_blank" rel="noopener" style="color:var(--billy-blue);text-decoration:underline">Dropbox 링크 ↗</a>`:'<span class="t-sub">없음</span>'}${canEv?` <button class="btn btn-line btn-sm" style="margin-left:8px" onclick="openEvidenceEdit('${id}')">${r.evidence?'변경':'링크 추가'}</button>`:''}</dd>`;
   modal('이체 요청 상세','',(flags.length?'<div style="margin-bottom:12px">'+flags.map(flagHtml).join('')+'</div>':'')+`<div class="dl">
     <dt>상태</dt><dd><span class="badge ${st[1]}">${st[0]}</span></dd>
     <dt>거래처/예금주</dt><dd>${escH(r.payee)}${cp(r.payee)} ${r.category==='유류비'?'<span class="tag tag-fuel">유류비</span>':''}</dd>
@@ -1330,9 +1356,42 @@ function viewPayout(id){
     <dt>팀</dt><dd>${escH(normalizeTeam(r.team)||'-')}</dd>
     <dt>이체요청일</dt><dd class="num">${escH(fmtD(r.appliedTs||r.applied)||'-')}</dd>
     <dt>이체희망일</dt><dd class="num">${escH(fmtD(dueOf(r))||'-')}</dd>
+    ${evRow}
     <dt>고액 이체건</dt><dd>${isBig(r)?'🔺 1천만+ (고액)':'해당 없음'}</dd>
     ${r.paidAt?`<dt>지급완료</dt><dd>${escH(fmtD(r.paidAt))}${r.payConfirmAmt?' · 입금액 <b>'+won(r.payConfirmAmt)+'원</b>':''}</dd>`:''}
   </div>${proof}${fuel}${wh}${memoHtml(r)}`,foot);
+}
+/* 증빙 링크만 따로 저장 — evidence_url 앞의 #D{json}#D(입금액·관리자 메모)는 그대로 두고 링크만 바꾼다.
+   누가 언제 바꿨는지는 관리자 메모에 한 줄 남긴다. */
+async function _payEvidenceWrite(id,url){
+  const {data,error}=await sb.from('fin_payouts').select('evidence_url').eq('id',id).single();
+  if(error)throw error;
+  const dx=_depExtra(data&&data.evidence_url);const j=Object.assign({},dx.j||{});
+  const ts=fmtTs(new Date().toISOString());
+  j.m=(Array.isArray(j.m)?j.m:[]).concat([{i:uid('mm'),a:ME().name,b:'📎 증빙 링크 '+(dx.url?(url?'변경':'삭제'):'등록')+' · '+ts+' · '+ME().name,t:ts.slice(0,16)}]);
+  const ev='#D'+JSON.stringify(j)+'#D'+url;
+  const {data:d2,error:e2}=await sb.from('fin_payouts').update({evidence_url:ev}).eq('id',id).select('evidence_url');
+  if(e2)throw e2;if(!d2||!d2.length||d2[0].evidence_url!==ev)throw new Error('서버에 저장되지 않았어요 (권한 확인 필요)');
+}
+function openEvidenceEdit(id){
+  const r=DB.payout.find(x=>x.id===id);if(!r)return;
+  modal('증빙 링크 '+(r.evidence?'변경':'추가'),'',`<div class="t-sub" style="margin-bottom:12px">${escH(r.payee)} · ${won(r.amount)} ${escH(r.unit)}</div>
+    <div class="form-row"><label>증빙 링크 (Dropbox)<span class="hint">세금계산서·거래명세서 등을 올린 폴더나 파일 주소</span></label><input class="input" id="ev_url" value="${escH(r.evidence||'')}" placeholder="https://www.dropbox.com/..." onkeydown="if(event.key==='Enter')saveEvidenceEdit('${id}')"></div>`,
+    `<button class="btn btn-secondary" onclick="viewPayout('${id}')">취소</button><button class="btn btn-primary" onclick="saveEvidenceEdit('${id}')">저장</button>`);
+  const el=document.getElementById('ev_url');if(el)el.focus();
+}
+let _evSaving=false;
+async function saveEvidenceEdit(id){
+  const r=DB.payout.find(x=>x.id===id);if(!r||_evSaving)return;
+  const url=val('ev_url');
+  if(url&&!/^https?:\/\//i.test(url)){toast('링크는 http:// 또는 https:// 로 시작해야 해요.','err');return;}
+  if(!url&&r.proofType==='명세서'){toast('거래명세서·영수증 건은 증빙 링크를 비울 수 없어요.','err');return;}
+  if(url===(r.evidence||'')){viewPayout(id);return;}
+  if(!IS_SUPA){r.evidence=url;render();viewPayout(id);toast('증빙 링크를 저장했어요.','ok');return;}
+  _evSaving=true;
+  try{await _payEvidenceWrite(id,url);await loadData();render();viewPayout(id);toast('증빙 링크를 저장했어요.','ok');}
+  catch(e){toast((e&&e.message)||'저장하지 못했어요.','err');}
+  finally{_evSaving=false;}
 }
 function proofDetailHtml(r){
   if(!r.proofType&&r.proofStatus!==PROOF_BULK24&&(proofCheckable(r)||r.proofStatus==='수취완료'))r=Object.assign({},r,{proofType:'미기재'});
@@ -1344,12 +1403,12 @@ function proofDetailHtml(r){
     const ov=proofOverdue(r);
     const stxt=r.proofStatus==='수취완료'?`<span class="badge badge-paid">수취완료${r.proofReceivedAt?' · '+escH(fmtD(r.proofReceivedAt)):''}</span>`:`<span class="badge ${ov?'badge-rejected':'badge-pending'}">받을 예정${ov?' · ⛔ 발행기한 경과':''}</span>`;
     const dl=proofDeadline(r.proofDate);const dls=dl?dl.getFullYear()+'-'+String(dl.getMonth()+1).padStart(2,'0')+'-'+String(dl.getDate()).padStart(2,'0'):'-';
-    body=`<div class="dl"><dt>증빙 유형</dt><dd>${escH(PROOF_LABEL[r.proofType]||r.proofType)}</dd><dt>작성일자</dt><dd class="num">${escH(fmtD(r.proofDate)||'-')}</dd><dt>발행기한</dt><dd class="num">~${fmtD(dls)} <span class="t-sub">(익월 10일)</span></dd><dt>발행상태</dt><dd>${stxt}</dd>${url?`<dt>증빙 링크</dt><dd>${url}</dd>`:''}</div>`;
+    body=`<div class="dl"><dt>증빙 유형</dt><dd>${escH(PROOF_LABEL[r.proofType]||r.proofType)}</dd><dt>작성일자</dt><dd class="num">${escH(fmtD(r.proofDate)||'-')}</dd><dt>발행기한</dt><dd class="num">~${fmtD(dls)} <span class="t-sub">(익월 10일)</span></dd><dt>발행상태</dt><dd>${stxt}</dd></div>`;
     if(canApprove())body+=`<div style="margin-top:9px">${r.proofStatus==='수취완료'?`<button class="btn btn-sm btn-line" onclick="markProof('${r.id}',false)">받을예정으로 되돌리기</button>`:`<button class="btn btn-sm btn-primary" onclick="markProof('${r.id}',true)">${I.check}<span>증빙 수취완료</span></button>`}</div>`;
   }else if(r.proofType==='none'){
     body=`<div class="dl"><dt>증빙 유형</dt><dd>증빙 없음</dd><dt>사유</dt><dd>${escH(r.proofReason||'-')}</dd></div>`;
   }else{
-    body=`<div class="dl"><dt>증빙 유형</dt><dd>${escH(PROOF_LABEL[r.proofType]||r.proofType)}</dd>${url?`<dt>증빙 링크</dt><dd>${url}</dd>`:'<dt>증빙 링크</dt><dd class="t-sub">없음</dd>'}</div>`;
+    body=`<div class="dl"><dt>증빙 유형</dt><dd>${escH(PROOF_LABEL[r.proofType]||r.proofType)}</dd></div>`;
   }
   /* 3.3% 외 건은 증빙 유형과 상관없이 확인 버튼 */
   if(!PROOF_ADEQ.has(r.proofType)&&(proofCheckable(r)||r.proofStatus==='수취완료')){
